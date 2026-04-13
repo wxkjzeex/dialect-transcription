@@ -1,26 +1,27 @@
 import os
 import json
-import wave
-import subprocess
 import tempfile
+import subprocess
+import wave
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
+import vosk
 
 app = Flask(__name__)
 CORS(app)
 
+# Путь к модели Vosk
+MODEL_PATH = "vosk-model-small-ru-0.22"
 
-# Проверяем наличие ffmpeg
-def check_ffmpeg():
-    try:
-        subprocess.run(['ffmpeg', '-version'], capture_output=True)
-        return True
-    except:
-        return False
+# Загружаем модель при старте
+if os.path.exists(MODEL_PATH):
+    model = vosk.Model(MODEL_PATH)
+    print(f"✅ Модель Vosk загружена из {MODEL_PATH}")
+else:
+    model = None
+    print(f"⚠️ Модель не найдена: {MODEL_PATH}")
 
-
-# Правила преобразования текста в фонетическую транскрипцию
+# Правила для фонетической транскрипции
 LETTER_TO_PHONEME = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
     'е': 'je', 'ё': 'jo', 'ж': 'ʐ', 'з': 'z', 'и': 'i',
@@ -31,26 +32,57 @@ LETTER_TO_PHONEME = {
     'э': 'e', 'ю': 'ju', 'я': 'ja'
 }
 
-# Диалектные особенности (севернорусские говоры)
-DIALECT_FEATURES = {
-    'оканье': True,  # сохранение 'о' в безударной позиции
-    'цоканье': False,  # замена 'ч' на 'ц'
-    'ёканье': True,  # 'е' -> 'ё' в некоторых позициях
-}
+def convert_to_wav(input_path):
+    """Конвертация аудио в WAV 16kHz mono"""
+    output_path = tempfile.mktemp(suffix='.wav')
+    cmd = [
+        'ffmpeg', '-i', input_path,
+        '-acodec', 'pcm_s16le',
+        '-ar', '16000',
+        '-ac', '1',
+        '-y', output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise Exception(f"Ошибка конвертации: {result.stderr.decode()}")
+    return output_path
 
+def transcribe_audio(audio_path):
+    """Распознавание речи через Vosk"""
+    if model is None:
+        return "Модель не загружена"
+    
+    wf = wave.open(audio_path, "rb")
+    if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() not in [8000, 16000, 32000, 48000]:
+        raise Exception("Аудио должно быть mono и с поддерживаемой частотой дискретизации")
+    
+    rec = vosk.KaldiRecognizer(model, wf.getframerate())
+    rec.SetWords(False)
+    
+    text = ""
+    while True:
+        data = wf.readframes(4000)
+        if len(data) == 0:
+            break
+        if rec.AcceptWaveform(data):
+            res = json.loads(rec.Result())
+            text += " " + res.get("text", "")
+    
+    final_res = json.loads(rec.FinalResult())
+    text += " " + final_res.get("text", "")
+    
+    return text.strip()
 
-def text_to_phonetic(text, dialect=True):
-    """Преобразование текста в фонетическую транскрипцию с учетом диалекта"""
+def text_to_phonetic(text):
+    """Преобразование в фонетическую транскрипцию"""
     text = text.lower().strip()
     phonetic = []
-
+    
     i = 0
     while i < len(text):
         char = text[i]
-
-        # Двухбуквенные сочетания
         if i < len(text) - 1:
-            two = text[i:i + 2]
+            two = text[i:i+2]
             if two == 'тс':
                 phonetic.append('ts')
                 i += 2
@@ -59,27 +91,7 @@ def text_to_phonetic(text, dialect=True):
                 phonetic.append('dʐ')
                 i += 2
                 continue
-            elif two == 'ого' and i < len(text) - 3 and text[i:i + 3] == 'ого':
-                phonetic.append('ovo')
-                i += 3
-                continue
-            elif two == 'его' and i < len(text) - 3 and text[i:i + 3] == 'его':
-                phonetic.append('evo')
-                i += 3
-                continue
-
-        # Диалектные замены
-        if dialect:
-            if DIALECT_FEATURES['цоканье'] and char == 'ч':
-                phonetic.append('ts')
-                i += 1
-                continue
-            if DIALECT_FEATURES['ёканье'] and char == 'е' and i > 0 and text[i - 1] not in 'аеёиоуыэюя':
-                phonetic.append('jo')
-                i += 1
-                continue
-
-        # Обычные буквы
+        
         if char in LETTER_TO_PHONEME:
             phoneme = LETTER_TO_PHONEME[char]
             if phoneme:
@@ -88,87 +100,67 @@ def text_to_phonetic(text, dialect=True):
             phonetic.append(' ')
         else:
             phonetic.append(char)
-
         i += 1
-
+    
     result = ''.join(phonetic)
-
-    # Оглушение звонких на конце слов
     words = result.split()
     voiced = {'b': 'p', 'v': 'f', 'g': 'k', 'd': 't', 'ʐ': 'ʂ', 'z': 's'}
-
+    
     processed = []
     for word in words:
         if word and word[-1] in voiced:
             word = word[:-1] + voiced[word[-1]]
         processed.append(word)
-
+    
     return ' '.join(processed)
-
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     if 'audio' not in request.files:
         return jsonify({'error': 'Нет файла'}), 400
-
+    
     file = request.files['audio']
     if file.filename == '':
         return jsonify({'error': 'Файл не выбран'}), 400
-
-    # Проверка формата
-    allowed = {'wav', 'mp3', 'ogg', 'flac', 'm4a', 'webm', 'mpeg', 'mpga', 'oga', 'm4a', 'opus'}
-    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-    if ext not in allowed:
-        return jsonify({'error': f'Формат не поддерживается. Разрешены: {", ".join(allowed)}'}), 400
-
+    
     try:
-        # Сохраняем загруженный файл во временную папку
+        # Сохраняем загруженный файл
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'wav'
         with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp:
             file.save(tmp.name)
             tmp_path = tmp.name
-
-        # В демо-режиме (без установленного Whisper/Vosk) используем тестовые данные
-        # В реальном проекте здесь был бы вызов API распознавания
-
-        # Имитация распознавания (замените на реальное API при необходимости)
-        import hashlib
-        hash_val = int(hashlib.md5(open(tmp_path, 'rb').read()).hexdigest()[:8], 16)
-
-        # Демо-фразы для диалектной речи
-        demo_phrases = [
-            ("Орать пора, земля поспела", "a'ratʲ pa'ra zʲem'lʲa pa'spʲela"),
-            ("Кочет кричит на заре", "'kotɕet krʲi'tɕit na za'rʲe"),
-            ("Кушак повяжи потуже", "ku'ʂak pa'vʲaʐɨ pa'tuʐe"),
-            ("Больно хорошо нынче", "'bolʲnə xəra'ʂo 'nɨnʲtɕe"),
-            ("Поди сюды, родимый", "pa'dʲi sʲu'dɨ ra'dʲimɨj"),
-        ]
-
-        idx = hash_val % len(demo_phrases)
-        text = demo_phrases[idx][0]
-
-        # Если бы было реальное распознавание:
-        # text = transcribe_with_whisper(tmp_path)
-
-        phonetic = text_to_phonetic(text, dialect=True)
-
-        # Удаляем временный файл
-        os.unlink(tmp_path)
-
+        
+        # Конвертируем в WAV (если не WAV)
+        if not ext == 'wav':
+            wav_path = convert_to_wav(tmp_path)
+            os.unlink(tmp_path)
+        else:
+            wav_path = tmp_path
+        
+        # Распознаём
+        text = transcribe_audio(wav_path)
+        
+        # Если распознавание не дало результата
+        if not text:
+            text = "[речь не распознана]"
+        
+        # Фонетическая транскрипция
+        phonetic = text_to_phonetic(text)
+        
+        # Очистка
+        os.unlink(wav_path)
+        
         return jsonify({
             'orthographic': text,
             'phonetic': phonetic
         })
-
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# force redeploy
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
