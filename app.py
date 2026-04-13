@@ -1,5 +1,6 @@
 import os
 import tempfile
+import uuid
 import subprocess
 import speech_recognition as sr
 from flask import Flask, request, jsonify, render_template
@@ -80,6 +81,20 @@ def corpus_page():
 def upload_corpus():
     if 'files' not in request.files:
         return jsonify({'error': 'Нет файлов'}), 400
+sessions = {}
+
+@app.route('/save_session', methods=['POST'])
+def save_session():
+    data = request.json
+    session_id = str(uuid.uuid4())[:8]
+    sessions[session_id] = data
+    return jsonify({'session_id': session_id})
+
+@app.route('/load_session/<session_id>', methods=['GET'])
+def load_session(session_id):
+    if session_id in sessions:
+        return jsonify(sessions[session_id])
+    return jsonify({'error': 'Сессия не найдена'}), 404
     
     files = request.files.getlist('files')
     parsed_manuscripts = []
