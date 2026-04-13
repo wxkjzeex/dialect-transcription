@@ -71,6 +71,10 @@ def index():
 def map_page():
     return render_template('map.html')
 
+@app.route('/corpus')
+def corpus_page():
+    return render_template('corpus.html')
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     if 'audio' not in request.files:
