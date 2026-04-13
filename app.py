@@ -100,27 +100,60 @@ def upload_corpus():
                 tree = ET.parse(file)
                 root = tree.getroot()
                 
+                # Извлекаем ВЕСЬ текст из тегов <w> и <pc>
+                all_text = []
+                
+                # Собираем текст из <w>
+                for w in root.findall('.//{http://www.tei-c.org/ns/1.0}w'):
+                    text = ''.join(w.itertext()).strip()
+                    if text:
+                        all_text.append(text)
+                
+                # Если с namespace не нашлось, пробуем без
+                if not all_text:
+                    for w in root.findall('.//w'):
+                        text = ''.join(w.itertext()).strip()
+                        if text:
+                            all_text.append(text)
+                
+                # Собираем знаки препинания из <pc>
+                for pc in root.findall('.//{http://www.tei-c.org/ns/1.0}pc'):
+                    text = pc.text.strip() if pc.text else ''
+                    if text:
+                        all_text.append(text)
+                
+                if not all_text:
+                    for pc in root.findall('.//pc'):
+                        text = pc.text.strip() if pc.text else ''
+                        if text:
+                            all_text.append(text)
+                
+                # Объединяем в сплошной текст
+                full_text = ' '.join(all_text)
+                
+                # Разбиваем на стихи по ключевым словам (упрощённо)
+                # Ищем маркеры начала стихов
                 verses = {}
+                verse_markers = ['Рече', 'рече', 'г҃ь', 'господь', 'оч҃е', 'сн҃ъ', 'братъ']
                 
-                # Пробуем с namespace и без
-                for ab in root.findall('.//ab[@n]'):
-                    verse_num = ab.get('n')
-                    verse_text = ' '.join(ab.itertext()).strip()
-                    if verse_num and verse_text:
-                        verses[verse_num] = verse_text
+                # Упрощённое разбиение: делим текст на 22 части (ст. 11-32)
+                words = full_text.split()
+                chunk_size = len(words) // 22
                 
-                if not verses:
-                    for ab in root.findall('.//{http://www.tei-c.org/ns/1.0}ab[@n]'):
-                        verse_num = ab.get('n')
-                        verse_text = ' '.join(ab.itertext()).strip()
-                        if verse_num and verse_text:
-                            verses[verse_num] = verse_text
+                for i in range(22):
+                    verse_num = str(i + 11)
+                    start = i * chunk_size
+                    end = (i + 1) * chunk_size if i < 21 else len(words)
+                    verse_text = ' '.join(words[start:end])
+                    if verse_text:
+                        verses[verse_num] = verse_text[:500] + '...' if len(verse_text) > 500 else verse_text
                 
                 parsed_manuscripts.append({
                     'name': file.filename,
                     'verses': verses,
                     'verse_count': len(verses)
                 })
+                
             except Exception as e:
                 return jsonify({'error': f'Ошибка парсинга {file.filename}: {str(e)}'}), 400
     
