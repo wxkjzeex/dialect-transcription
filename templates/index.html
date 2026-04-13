@@ -499,6 +499,11 @@
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
                 const data = await response.json();
                 loading.style.display = 'none';
                 
@@ -511,7 +516,8 @@
                 }
             } catch (err) {
                 loading.style.display = 'none';
-                showError('Нет связи с сервером');
+                showError('Ошибка: ' + err.message);
+                console.error('Детали ошибки:', err);
             }
         });
         
