@@ -64,7 +64,7 @@
             border: 2px dashed #c9af91;
             border-radius: 16px;
             padding: 32px;
-            text-align: center;
+            text-: center;
             margin-bottom: 24px;
             cursor: pointer;
             transition: all 0.2s;
@@ -326,6 +326,53 @@
             alignBtn.textContent = '⏳ Выравнивание...';
             alignBtn.disabled = true;
             
+            const formData = new FormData();
+            uploadedFiles.forEach(file => formData.append('files', file));
+            
+            try {
+                const response = await fetch('/upload_corpus', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Выравниваем по стихам
+                    const mainMs = data.manuscripts[mainIndex];
+                    const otherMss = data.manuscripts.filter((_, i) => i != mainIndex);
+                    
+                    // Собираем все номера стихов из главного списка
+                    const verseNumbers = Object.keys(mainMs.verses).sort((a, b) => parseInt(a) - parseInt(b));
+                    
+                    alignedData = {
+                        main: mainMs.name,
+                        aligned: otherMss.map(m => m.name),
+                        verses: verseNumbers.map(num => {
+                            const texts = [mainMs.verses[num] || '—'];
+                            otherMss.forEach(ms => {
+                                texts.push(ms.verses[num] || '—');
+                            });
+                            return { num, texts };
+                        })
+                    };
+                    
+                    renderAlignment();
+                    exportBtn.disabled = false;
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (err) {
+                alert('Ошибка соединения: ' + err.message);
+            } finally {
+                alignBtn.textContent = '🔗 Выровнять списки';
+                alignBtn.disabled = false;
+            }
+        });
+            
+            alignBtn.textContent = '⏳ Выравнивание...';
+            alignBtn.disabled = true;
+            
             // Здесь будет вызов API для выравнивания
             // Пока демо-режим
             
@@ -358,6 +405,7 @@
             alignedData.verses.forEach(verse => {
                 html += '<tr><td><strong>' + verse.num + '</strong></td>';
                 verse.texts.forEach(text => {
+                    html += '<td class="verse-text editable-cell">' + text;
                     html += '<td class="verse-text">' + text;
                     // Добавляем метки разночтений (демо)
                     if (text.includes('ч҃лвкъ')) {
@@ -370,6 +418,45 @@
                 });
                 html += '</tr>';
             });
+
+            function makeEditable() {
+                document.querySelectorAll('.editable-cell').forEach(cell => {
+                    cell.addEventListener('dblclick', function() {
+                        const originalText = this.textContent;
+                        const input = document.createElement('input');
+                        input.value = originalText;
+                        input.style.width = '100%';
+                        input.style.padding = '4px';
+                        input.style.fontFamily = '"BukyVede", "Menaion Unicode", serif';
+                        input.style.fontSize = '16px';
+                        
+                        this.textContent = '';
+                        this.appendChild(input);
+                        input.focus();
+                        
+                        input.addEventListener('blur', () => {
+                            this.textContent = input.value || originalText;
+                            // Обновить alignedData
+                            updateAlignedData();
+                        });
+                        
+                        input.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') {
+                                input.blur();
+                            }
+                        });
+                    });
+                });
+            }
+            
+            function updateAlignedData() {
+                // Обновление alignedData после редактирования
+                const rows = document.querySelectorAll('.alignment-table tbody tr');
+                alignedData.verses.forEach((verse, rowIndex) => {
+                    const cells = rows[rowIndex].querySelectorAll('td');
+                    verse.texts = Array.from(cells).slice(1).map(cell => cell.textContent.trim());
+                });
+            }
             
             html += '</table>';
             
