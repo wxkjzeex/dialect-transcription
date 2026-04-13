@@ -1,25 +1,12 @@
 import os
-import json
 import tempfile
 import subprocess
-import wave
+import speech_recognition as sr
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import vosk
 
 app = Flask(__name__)
 CORS(app)
-
-# Путь к модели Vosk
-MODEL_PATH = "vosk-model-small-ru-0.22"
-
-# Загружаем модель при старте
-if os.path.exists(MODEL_PATH):
-    model = vosk.Model(MODEL_PATH)
-    print(f"✅ Модель Vosk загружена из {MODEL_PATH}")
-else:
-    model = None
-    print(f"⚠️ Модель не найдена: {MODEL_PATH}")
 
 # Правила для фонетической транскрипции
 LETTER_TO_PHONEME = {
@@ -32,49 +19,11 @@ LETTER_TO_PHONEME = {
     'э': 'e', 'ю': 'ju', 'я': 'ja'
 }
 
-def convert_to_wav(input_path):
-    """Конвертация аудио в WAV 16kHz mono"""
-    output_path = tempfile.mktemp(suffix='.wav')
-    cmd = [
-        'ffmpeg', '-i', input_path,
-        '-acodec', 'pcm_s16le',
-        '-ar', '16000',
-        '-ac', '1',
-        '-y', output_path
-    ]
-    result = subprocess.run(cmd, capture_output=True)
-    if result.returncode != 0:
-        raise Exception(f"Ошибка конвертации: {result.stderr.decode()}")
-    return output_path
-
-def transcribe_audio(audio_path):
-    """Распознавание речи через Vosk"""
-    if model is None:
-        return "Модель не загружена"
-    
-    wf = wave.open(audio_path, "rb")
-    if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() not in [8000, 16000, 32000, 48000]:
-        raise Exception("Аудио должно быть mono и с поддерживаемой частотой дискретизации")
-    
-    rec = vosk.KaldiRecognizer(model, wf.getframerate())
-    rec.SetWords(False)
-    
-    text = ""
-    while True:
-        data = wf.readframes(4000)
-        if len(data) == 0:
-            break
-        if rec.AcceptWaveform(data):
-            res = json.loads(rec.Result())
-            text += " " + res.get("text", "")
-    
-    final_res = json.loads(rec.FinalResult())
-    text += " " + final_res.get("text", "")
-    
-    return text.strip()
-
 def text_to_phonetic(text):
     """Преобразование в фонетическую транскрипцию"""
+    if not text:
+        return ""
+    
     text = text.lower().strip()
     phonetic = []
     
@@ -128,30 +77,36 @@ def transcribe():
         return jsonify({'error': 'Файл не выбран'}), 400
     
     try:
-        # Сохраняем загруженный файл
+        # Сохраняем файл
         ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'wav'
         with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp:
             file.save(tmp.name)
             tmp_path = tmp.name
         
-        # Конвертируем в WAV (если не WAV)
-        if not ext == 'wav':
-            wav_path = convert_to_wav(tmp_path)
+        # Конвертируем в WAV через ffmpeg (Render имеет ffmpeg по умолчанию)
+        wav_path = tmp_path
+        if ext != 'wav':
+            wav_path = tempfile.mktemp(suffix='.wav')
+            result = subprocess.run([
+                'ffmpeg', '-i', tmp_path,
+                '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
+                '-y', wav_path
+            ], capture_output=True, timeout=30)
             os.unlink(tmp_path)
-        else:
-            wav_path = tmp_path
+            
+            if result.returncode != 0:
+                raise Exception(f"Ошибка конвертации аудио: {result.stderr.decode()}")
         
-        # Распознаём
-        text = transcribe_audio(wav_path)
+        # Распознаём через Google Speech Recognition
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio = recognizer.record(source)
         
-        # Если распознавание не дало результата
-        if not text:
-            text = "[речь не распознана]"
+        text = recognizer.recognize_google(audio, language='ru-RU')
         
         # Фонетическая транскрипция
         phonetic = text_to_phonetic(text)
         
-        # Очистка
         os.unlink(wav_path)
         
         return jsonify({
@@ -159,8 +114,14 @@ def transcribe():
             'phonetic': phonetic
         })
     
+    except sr.UnknownValueError:
+        return jsonify({'error': 'Речь не распознана. Попробуйте другой файл.'}), 400
+    except sr.RequestError as e:
+        return jsonify({'error': f'Ошибка сервиса распознавания: {e}'}), 500
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Превышено время обработки аудио'}), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
