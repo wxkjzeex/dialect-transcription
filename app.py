@@ -10,6 +10,9 @@ import xml.etree.ElementTree as ET
 app = Flask(__name__)
 CORS(app)
 
+# Хранилище сессий
+sessions = {}
+
 # Правила для фонетической транскрипции
 LETTER_TO_PHONEME = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
@@ -65,6 +68,9 @@ def text_to_phonetic(text):
     
     return ' '.join(processed)
 
+
+# ==================== МАРШРУТЫ ====================
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -77,24 +83,13 @@ def map_page():
 def corpus_page():
     return render_template('corpus.html')
 
+
+# ==================== КОРПУС: ЗАГРУЗКА И ПАРСИНГ ====================
+
 @app.route('/upload_corpus', methods=['POST'])
 def upload_corpus():
     if 'files' not in request.files:
         return jsonify({'error': 'Нет файлов'}), 400
-sessions = {}
-
-@app.route('/save_session', methods=['POST'])
-def save_session():
-    data = request.json
-    session_id = str(uuid.uuid4())[:8]
-    sessions[session_id] = data
-    return jsonify({'session_id': session_id})
-
-@app.route('/load_session/<session_id>', methods=['GET'])
-def load_session(session_id):
-    if session_id in sessions:
-        return jsonify(sessions[session_id])
-    return jsonify({'error': 'Сессия не найдена'}), 404
     
     files = request.files.getlist('files')
     parsed_manuscripts = []
@@ -105,9 +100,7 @@ def load_session(session_id):
                 tree = ET.parse(file)
                 root = tree.getroot()
                 
-                # Извлекаем текст по стихам (ищем ab с атрибутом n)
                 verses = {}
-                ns = {'tei': 'http://www.tei-c.org/ns/1.0'}
                 
                 # Пробуем с namespace и без
                 for ab in root.findall('.//ab[@n]'):
@@ -133,6 +126,25 @@ def load_session(session_id):
     
     return jsonify({'manuscripts': parsed_manuscripts})
 
+
+# ==================== КОРПУС: СОХРАНЕНИЕ И ЗАГРУЗКА СЕССИЙ ====================
+
+@app.route('/save_session', methods=['POST'])
+def save_session():
+    data = request.json
+    session_id = str(uuid.uuid4())[:8]
+    sessions[session_id] = data
+    return jsonify({'session_id': session_id})
+
+@app.route('/load_session/<session_id>', methods=['GET'])
+def load_session(session_id):
+    if session_id in sessions:
+        return jsonify(sessions[session_id])
+    return jsonify({'error': 'Сессия не найдена'}), 404
+
+
+# ==================== ТРАНСКРИПЦИЯ ====================
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     if 'audio' not in request.files:
@@ -143,13 +155,11 @@ def transcribe():
         return jsonify({'error': 'Файл не выбран'}), 400
     
     try:
-        # Сохраняем файл
         ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'wav'
         with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp:
             file.save(tmp.name)
             tmp_path = tmp.name
         
-        # Конвертируем в WAV через ffmpeg (Render имеет ffmpeg по умолчанию)
         wav_path = tmp_path
         if ext != 'wav':
             wav_path = tempfile.mktemp(suffix='.wav')
@@ -161,16 +171,13 @@ def transcribe():
             os.unlink(tmp_path)
             
             if result.returncode != 0:
-                raise Exception(f"Ошибка конвертации аудио: {result.stderr.decode()}")
+                raise Exception(f"Ошибка конвертации аудио")
         
-        # Распознаём через Google Speech Recognition
         recognizer = sr.Recognizer()
         with sr.AudioFile(wav_path) as source:
             audio = recognizer.record(source)
         
         text = recognizer.recognize_google(audio, language='ru-RU')
-        
-        # Фонетическая транскрипция
         phonetic = text_to_phonetic(text)
         
         os.unlink(wav_path)
@@ -188,6 +195,7 @@ def transcribe():
         return jsonify({'error': 'Превышено время обработки аудио'}), 500
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
