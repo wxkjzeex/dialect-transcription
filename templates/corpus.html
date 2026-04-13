@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Параллельный корпус</title>
+    <title>Параллельный корпус · Притча о блудном сыне</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -27,16 +27,8 @@
             padding: 24px 32px;
             border-bottom: 3px solid #b89a7a;
         }
-        .header h1 {
-            font-size: 28px;
-            font-weight: 400;
-            letter-spacing: 2px;
-        }
-        .header p {
-            opacity: 0.8;
-            font-size: 14px;
-            margin-top: 8px;
-        }
+        .header h1 { font-size: 28px; font-weight: 400; letter-spacing: 2px; }
+        .header p { opacity: 0.8; font-size: 14px; margin-top: 8px; }
         .tabs {
             display: flex;
             background: #e8ddd0;
@@ -53,10 +45,7 @@
             transition: all 0.2s;
         }
         .tab:hover { background: #d9cbbc; }
-        .tab.active {
-            background: #fffbf5;
-            color: #4a3d2c;
-        }
+        .tab.active { background: #fffbf5; color: #4a3d2c; }
         .content { padding: 32px; }
         .upload-area {
             border: 2px dashed #c9af91;
@@ -67,10 +56,7 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .upload-area:hover {
-            border-color: #8b7355;
-            background: #faf5ef;
-        }
+        .upload-area:hover { border-color: #8b7355; background: #faf5ef; }
         .btn {
             padding: 12px 24px;
             background: #4a3d2c;
@@ -82,12 +68,9 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .btn:hover {
-            background: #5d4e37;
-            transform: translateY(-2px);
-        }
-        .btn-secondary { background: #8b7355; }
+        .btn:hover { background: #5d4e37; transform: translateY(-2px); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: #8b7355; }
         .file-list { margin-top: 16px; }
         .file-item {
             display: flex;
@@ -98,11 +81,7 @@
             border-radius: 8px;
             margin-bottom: 8px;
         }
-        .file-remove {
-            color: #a05040;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        .file-remove { color: #a05040; cursor: pointer; font-weight: bold; }
         .controls {
             display: flex;
             gap: 12px;
@@ -113,6 +92,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 24px;
+            font-size: 14px;
         }
         .alignment-table th {
             text-align: left;
@@ -126,36 +106,17 @@
             padding: 12px;
             border: 1px solid #d4c5b0;
             vertical-align: top;
+            font-family: 'BukyVede', 'Menaion Unicode', serif;
         }
         .alignment-table tr:hover td { background: #faf5ef; }
-        .verse-text {
-            font-family: 'BukyVede', 'Menaion Unicode', serif;
-            font-size: 18px;
-            color: #2c241a;
+        .verse-text { font-size: 15px; color: #2c241a; }
+        .progress {
+            margin: 20px 0;
+            padding: 12px;
+            background: #e8ddd0;
+            border-radius: 8px;
+            text-align: center;
         }
-        .editable-cell { cursor: text; }
-        .editable-cell input {
-            width: 100%;
-            padding: 4px;
-            font-family: 'BukyVede', 'Menaion Unicode', serif;
-            font-size: 16px;
-            border: 1px solid #b89a7a;
-            border-radius: 4px;
-            background: #fffbf5;
-        }
-        .diff-type {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-left: 8px;
-        }
-        .diff-graphic { background: #fde2e4; color: #c0392b; }
-        .diff-phonetic { background: #fff3cd; color: #856404; }
-        .diff-morph { background: #d4edda; color: #155724; }
-        .diff-syntax { background: #d1ecf1; color: #0c5460; }
-        .diff-lexical { background: #e2d5f1; color: #6f42c1; }
     </style>
 </head>
 <body>
@@ -189,23 +150,14 @@
                 </select>
             </div>
             
-            <div style="margin-top: 20px;">
-                <label style="font-weight: 600; color: #3e3225;">📊 Типы разночтений:</label>
-                <div style="display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap;">
-                    <label><input type="checkbox" checked> Графические</label>
-                    <label><input type="checkbox" checked> Фонетические</label>
-                    <label><input type="checkbox" checked> Морфологические</label>
-                    <label><input type="checkbox" checked> Синтаксические</label>
-                    <label><input type="checkbox" checked> Лексические</label>
-                </div>
-            </div>
-            
+            <div id="progress" style="display: none;"></div>
             <div id="alignmentResult"></div>
         </div>
     </div>
 
     <script>
         let uploadedFiles = [];
+        let manuscripts = [];
         let alignedData = null;
         
         const dropZone = document.getElementById('dropZone');
@@ -214,8 +166,8 @@
         const alignBtn = document.getElementById('alignBtn');
         const exportBtn = document.getElementById('exportBtn');
         const mainMsSelect = document.getElementById('mainMsSelect');
+        const progressDiv = document.getElementById('progress');
         
-        // Drag & drop
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -234,13 +186,76 @@
         });
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
         
-        function handleFiles(files) {
+        async function handleFiles(files) {
             for (let file of files) {
                 if (file.name.endsWith('.xml')) {
                     uploadedFiles.push(file);
                 }
             }
             renderFileList();
+            
+            // Парсим файлы на клиенте
+            if (uploadedFiles.length > 0) {
+                progressDiv.style.display = 'block';
+                progressDiv.className = 'progress';
+                progressDiv.innerHTML = '⏳ Парсинг XML-файлов...';
+                
+                manuscripts = [];
+                for (let i = 0; i < uploadedFiles.length; i++) {
+                    const file = uploadedFiles[i];
+                    progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
+                    
+                    try {
+                        const text = await file.text();
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(text, 'application/xml');
+                        
+                        // Извлекаем весь текст из <w> и <pc>
+                        const words = [];
+                        const wElements = doc.querySelectorAll('w');
+                        const pcElements = doc.querySelectorAll('pc');
+                        
+                        wElements.forEach(w => {
+                            const t = w.textContent.trim();
+                            if (t) words.push(t);
+                        });
+                        pcElements.forEach(pc => {
+                            const t = pc.textContent.trim();
+                            if (t && t !== '·' && t !== '⸱' && t !== '※' && t !== '∽') {
+                                words.push(t);
+                            }
+                        });
+                        
+                        const fullText = words.join(' ');
+                        
+                        // Разбиваем на 22 стиха (11-32)
+                        const verses = {};
+                        const allWords = fullText.split(/\s+/);
+                        const chunkSize = Math.ceil(allWords.length / 22);
+                        
+                        for (let v = 0; v < 22; v++) {
+                            const start = v * chunkSize;
+                            const end = Math.min((v + 1) * chunkSize, allWords.length);
+                            const verseText = allWords.slice(start, end).join(' ');
+                            if (verseText) {
+                                verses[String(v + 11)] = verseText.substring(0, 300) + (verseText.length > 300 ? '...' : '');
+                            }
+                        }
+                        
+                        manuscripts.push({
+                            name: file.name,
+                            verses: verses
+                        });
+                        
+                    } catch (err) {
+                        console.error('Ошибка парсинга:', file.name, err);
+                    }
+                }
+                
+                progressDiv.innerHTML = '✅ Парсинг завершён!';
+                setTimeout(() => { progressDiv.style.display = 'none'; }, 1500);
+            }
+            
             updateUI();
         }
         
@@ -269,6 +284,7 @@
         
         window.removeFile = function(index) {
             uploadedFiles.splice(index, 1);
+            manuscripts.splice(index, 1);
             renderFileList();
             updateUI();
         };
@@ -279,56 +295,33 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-        // Выравнивание
-        alignBtn.addEventListener('click', async () => {
+        alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
             
-            const mainIndex = mainMsSelect.value;
-            if (mainIndex === '') {
-                alert('Выберите главный список для выравнивания');
+            const mainIndex = parseInt(mainMsSelect.value);
+            if (isNaN(mainIndex)) {
+                alert('Выберите главный список');
                 return;
             }
             
-            alignBtn.textContent = '⏳ Выравнивание...';
-            alignBtn.disabled = true;
+            const mainMs = manuscripts[mainIndex];
+            const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
             
-            const formData = new FormData();
-            uploadedFiles.forEach(file => formData.append('files', file));
+            // Собираем все номера стихов
+            const verseNumbers = Object.keys(mainMs.verses).sort((a, b) => parseInt(a) - parseInt(b));
             
-            try {
-                const response = await fetch('/upload_corpus', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    const mainMs = data.manuscripts[mainIndex];
-                    const otherMss = data.manuscripts.filter((_, i) => i != mainIndex);
-                    const verseNumbers = Object.keys(mainMs.verses).sort((a, b) => parseInt(a) - parseInt(b));
-                    
-                    alignedData = {
-                        main: mainMs.name,
-                        aligned: otherMss.map(m => m.name),
-                        verses: verseNumbers.map(num => {
-                            const texts = [mainMs.verses[num] || '—'];
-                            otherMss.forEach(ms => texts.push(ms.verses[num] || '—'));
-                            return { num, texts };
-                        })
-                    };
-                    
-                    renderAlignment();
-                    exportBtn.disabled = false;
-                } else {
-                    alert('Ошибка: ' + data.error);
-                }
-            } catch (err) {
-                alert('Ошибка соединения: ' + err.message);
-            } finally {
-                alignBtn.textContent = '🔗 Выровнять списки';
-                alignBtn.disabled = false;
-            }
+            alignedData = {
+                main: mainMs.name,
+                aligned: otherMss.map(m => m.name),
+                verses: verseNumbers.map(num => {
+                    const texts = [mainMs.verses[num] || '—'];
+                    otherMss.forEach(ms => texts.push(ms.verses[num] || '—'));
+                    return { num, texts };
+                })
+            };
+            
+            renderAlignment();
+            exportBtn.disabled = false;
         });
         
         function renderAlignment() {
@@ -341,11 +334,7 @@
             alignedData.verses.forEach(verse => {
                 html += '<tr><td><strong>' + verse.num + '</strong></td>';
                 verse.texts.forEach(text => {
-                    html += '<td class="verse-text editable-cell">' + escapeHtml(text);
-                    // Добавляем метки разночтений (демо)
-                    if (text.includes('ч҃лвкъ')) html += '<span class="diff-type diff-graphic">граф.</span>';
-                    if (text.includes('мьнии')) html += '<span class="diff-type diff-lexical">лекс.</span>';
-                    html += '</td>';
+                    html += '<td class="verse-text">' + escapeHtml(text) + '</td>';
                 });
                 html += '</tr>';
             });
@@ -357,9 +346,7 @@
                     <button class="btn btn-secondary" onclick="loadSession()" style="margin-left: 12px;">📂 Загрузить сессию</button>
                 </div>
             `;
-            
             container.innerHTML = html;
-            makeEditable();
         }
         
         function escapeHtml(text) {
@@ -368,47 +355,17 @@
             return div.innerHTML;
         }
         
-        function makeEditable() {
-            document.querySelectorAll('.editable-cell').forEach(cell => {
-                cell.addEventListener('dblclick', function() {
-                    const originalText = this.textContent;
-                    const input = document.createElement('input');
-                    input.value = originalText;
-                    this.textContent = '';
-                    this.appendChild(input);
-                    input.focus();
-                    
-                    input.addEventListener('blur', () => {
-                        this.textContent = input.value || originalText;
-                        updateAlignedData();
-                    });
-                    
-                    input.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') input.blur();
-                    });
-                });
-            });
-        }
-        
-        function updateAlignedData() {
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            alignedData.verses.forEach((verse, rowIndex) => {
-                const cells = rows[rowIndex].querySelectorAll('td');
-                verse.texts = Array.from(cells).map(cell => cell.textContent.trim());
-            });
-        }
-        
         window.saveSession = function() {
             const session = { files: uploadedFiles.map(f => f.name), aligned: alignedData, timestamp: new Date().toISOString() };
             localStorage.setItem('corpusSession', JSON.stringify(session));
-            alert('Сессия сохранена в браузере');
+            alert('Сессия сохранена');
         };
         
         window.loadSession = function() {
             const saved = localStorage.getItem('corpusSession');
             if (saved) {
                 const session = JSON.parse(saved);
-                alert('Загружена сессия от ' + session.timestamp + '\nФайлы: ' + session.files.join(', '));
+                alert('Загружена сессия от ' + session.timestamp);
             } else {
                 alert('Нет сохранённой сессии');
             }
@@ -417,17 +374,21 @@
         exportBtn.addEventListener('click', () => {
             if (!alignedData) return;
             
-            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI xmlns="http://www.tei-c.org/ns/1.0">\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Притча о блудном сыне</title>\n      </titleStmt>\n      <publicationStmt>\n        <p>Выровнено автоматически</p>\n      </publicationStmt>\n      <sourceDesc>\n        <listWit>\n          <witness xml:id="main">' + alignedData.main + '</witness>\n';
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Притча о блудном сыне</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
+            xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
             alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
-            xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n      <div type="chapter" n="15">\n';
+            xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n';
             
             alignedData.verses.forEach(verse => {
-                xml += '        <app>\n          <lem wit="#main">' + verse.texts[0] + '</lem>\n';
-                verse.texts.slice(1).forEach((text, i) => xml += '          <rdg wit="#wit' + i + '">' + text + '</rdg>\n');
-                xml += '        </app>\n';
+                xml += '      <div type="verse" n="' + verse.num + '">\n';
+                xml += '        <ab wit="#main">' + verse.texts[0] + '</ab>\n';
+                verse.texts.slice(1).forEach((text, i) => {
+                    xml += '        <ab wit="#wit' + i + '">' + text + '</ab>\n';
+                });
+                xml += '      </div>\n';
             });
             
-            xml += '      </div>\n    </body>\n  </text>\n</TEI>';
+            xml += '    </body>\n  </text>\n</TEI>';
             
             const blob = new Blob([xml], { type: 'application/xml' });
             const a = document.createElement('a');
