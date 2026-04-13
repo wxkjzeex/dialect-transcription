@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Автоматическая транскрипция диалектной речи</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.8; font-size: 16px; }
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: #2c3e50;
+            background: white;
+            border-bottom: 3px solid #2c3e50;
+        }
+        .tab:hover { background: #e9ecef; }
+        .content {
+            padding: 40px;
+        }
+        .upload-area {
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 30px;
+        }
+        .upload-area:hover {
+            border-color: #2c3e50;
+            background: #f8f9fa;
+        }
+        .upload-area.dragover {
+            border-color: #27ae60;
+            background: #e8f8f5;
+        }
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        .upload-text {
+            font-size: 18px;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        .upload-hint {
+            font-size: 14px;
+            color: #adb5bd;
+        }
+        #fileInput { display: none; }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 30px;
+        }
+        .result-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .result-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .result-text {
+            font-size: 20px;
+            color: #2c3e50;
+            word-break: break-word;
+        }
+        .phonetic-text {
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2c3e50;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2c3e50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .selected-file {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f4fd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .remove-file {
+            color: #dc3545;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗣️ Автоматическая транскрипция<br>диалектной речи</h1>
+            <p>ЛР1: Транскрипция</p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active">ЛР1: Транскрипция</div>
+            <div class="tab">ЛР2: Генерация речи</div>
+            <div class="tab">ЛР3: Карта</div>
+        </div>
+
+        <div class="content">
+            <p style="margin-bottom: 20px; color: #6c757d;">
+                Загрузите аудиофайл, чтобы получить орфографическую запись и фонетическую транскрипцию.
+            </p>
+
+            <div class="upload-area" id="dropZone">
+                <div class="upload-icon">🎤</div>
+                <div class="upload-text">Выберите или перетащите аудиофайл</div>
+                <div class="upload-hint">MP3, WAV, OGG, FLAC, M4A (до 25 MB)</div>
+            </div>
+            <input type="file" id="fileInput" accept="audio/*">
+
+            <div id="selectedFileInfo" style="display: none;"></div>
+
+            <button class="btn" id="processBtn" disabled>Обработать</button>
+
+            <div id="results" style="display: none;">
+                <div class="results">
+                    <div class="result-box">
+                        <div class="result-label">📝 Орфографическая запись</div>
+                        <div class="result-text" id="orthographicResult"></div>
+                    </div>
+
+                    <div class="result-box">
+                        <div class="result-label">🔊 Фонетическая транскрипция</div>
+                        <div class="phonetic-text" id="phoneticResult"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading" style="display: none;">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Обработка аудиофайла...</p>
+                </div>
+            </div>
+
+            <div id="error" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const results = document.getElementById('results');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const selectedFileInfo = document.getElementById('selectedFileInfo');
+
+        let selectedFile = null;
+
+        // Обработчики для drag & drop
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Проверка размера (25 MB)
+            if (file.size > 25 * 1024 * 1024) {
+                showError('Файл слишком большой. Максимальный размер: 25 MB');
+                return;
+            }
+
+            selectedFile = file;
+
+            // Показываем информацию о файле
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            selectedFileInfo.style.display = 'block';
+            selectedFileInfo.innerHTML = `
+                <div class="selected-file">
+                    <span>📁 ${file.name} (${sizeMB} MB)</span>
+                    <span class="remove-file" onclick="clearFile()">✕</span>
+                </div>
+            `;
+
+            processBtn.disabled = false;
+            hideError();
+        }
+
+        window.clearFile = function() {
+            selectedFile = null;
+            fileInput.value = '';
+            selectedFileInfo.style.display = 'none';
+            processBtn.disabled = true;
+        };
+
+        processBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            // Показываем загрузку
+            results.style.display = 'none';
+            loading.style.display = 'block';
+            hideError();
+
+            const formData = new FormData();
+            formData.append('audio', selectedFile);
+
+            try {
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                loading.style.display = 'none';
+
+                if (response.ok) {
+                    document.getElementById('orthographicResult').textContent = data.orthographic;
+                    document.getElementById('phoneticResult').textContent = '/' + data.phonetic + '/';
+                    results.style.display = 'block';
+                } else {
+                    showError(data.error || 'Ошибка при обработке файла');
+                }
+            } catch (err) {
+                loading.style.display = 'none';
+                showError('Ошибка соединения с сервером');
+            }
+        });
+
+        function showError(message) {
+            errorDiv.style.display = 'block';
+            errorDiv.className = 'error';
+            errorDiv.textContent = '❌ ' + message;
+        }
+
+        function hideError() {
+            errorDiv.style.display = 'none';
+        }
+
+        // Обработчики для вкладок (демо)
+        document.querySelectorAll('.tab').forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                if (index === 1) {
+                    alert('ЛР2: Генерация речи - в разработке');
+                } else if (index === 2) {
+                    window.location.href = 'https://dialekt-labs.onrender.com';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
