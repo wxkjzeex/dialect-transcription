@@ -307,6 +307,26 @@
             renderFileList();
             updateUI();
         };
+
+        function detectDiffType(word1, word2) {
+            if (word1 === word2) return null;
+            
+            // Графические: разные буквы для одного звука (ѹ/у, ѡ/о)
+            const graphicPairs = [['ѹ', 'у'], ['ѡ', 'о'], ['ѣ', 'е'], ['ꙗ', 'я']];
+            for (let [old, new_] of graphicPairs) {
+                if (word1.replace(new RegExp(old, 'g'), new_) === word2.replace(new RegExp(old, 'g'), new_)) {
+                    return 'graphic';
+                }
+            }
+            
+            // Если слова разной длины на 1-2 буквы — морфологические
+            if (Math.abs(word1.length - word2.length) <= 2) {
+                return 'morph';
+            }
+            
+            // По умолчанию — лексические
+            return 'lexical';
+        }
         
         function updateUI() {
             alignBtn.disabled = uploadedFiles.length < 2;
