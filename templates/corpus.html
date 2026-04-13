@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Параллельный корпус · Притча о блудном сыне</title>
+    <title>Параллельный корпус</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -57,14 +57,12 @@
             background: #fffbf5;
             color: #4a3d2c;
         }
-        .content {
-            padding: 32px;
-        }
+        .content { padding: 32px; }
         .upload-area {
             border: 2px dashed #c9af91;
             border-radius: 16px;
             padding: 32px;
-            text-: center;
+            text-align: center;
             margin-bottom: 24px;
             cursor: pointer;
             transition: all 0.2s;
@@ -88,50 +86,9 @@
             background: #5d4e37;
             transform: translateY(-2px);
         }
-        .btn-secondary {
-            background: #8b7355;
-        }
-        .manuscripts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 24px;
-        }
-        .manuscript-card {
-            background: #f8f2ea;
-            border-radius: 12px;
-            padding: 16px;
-            border-left: 4px solid #b89a7a;
-        }
-        .manuscript-title {
-            font-weight: 600;
-            color: #3e3225;
-            margin-bottom: 8px;
-        }
-        .manuscript-meta {
-            font-size: 12px;
-            color: #8b7355;
-            margin-bottom: 12px;
-        }
-        .verse-line {
-            display: flex;
-            gap: 12px;
-            padding: 8px 0;
-            border-bottom: 1px solid #e0d3c4;
-        }
-        .verse-num {
-            min-width: 40px;
-            color: #b89a7a;
-            font-weight: 600;
-        }
-        .verse-text {
-            font-family: 'BukyVede', 'Menaion Unicode', serif;
-            font-size: 18px;
-            color: #2c241a;
-        }
-        .file-list {
-            margin-top: 16px;
-        }
+        .btn-secondary { background: #8b7355; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .file-list { margin-top: 16px; }
         .file-item {
             display: flex;
             align-items: center;
@@ -170,8 +127,21 @@
             border: 1px solid #d4c5b0;
             vertical-align: top;
         }
-        .alignment-table tr:hover td {
-            background: #faf5ef;
+        .alignment-table tr:hover td { background: #faf5ef; }
+        .verse-text {
+            font-family: 'BukyVede', 'Menaion Unicode', serif;
+            font-size: 18px;
+            color: #2c241a;
+        }
+        .editable-cell { cursor: text; }
+        .editable-cell input {
+            width: 100%;
+            padding: 4px;
+            font-family: 'BukyVede', 'Menaion Unicode', serif;
+            font-size: 16px;
+            border: 1px solid #b89a7a;
+            border-radius: 4px;
+            background: #fffbf5;
         }
         .diff-type {
             display: inline-block;
@@ -245,26 +215,23 @@
         const exportBtn = document.getElementById('exportBtn');
         const mainMsSelect = document.getElementById('mainMsSelect');
         
+        // Drag & drop
         dropZone.addEventListener('click', () => fileInput.click());
-        
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = '#8b7355';
             dropZone.style.background = '#faf5ef';
         });
-        
         dropZone.addEventListener('dragleave', () => {
             dropZone.style.borderColor = '#c9af91';
             dropZone.style.background = 'transparent';
         });
-        
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.style.borderColor = '#c9af91';
             dropZone.style.background = 'transparent';
             handleFiles(e.dataTransfer.files);
         });
-        
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
         
         function handleFiles(files) {
@@ -282,7 +249,6 @@
                 fileList.innerHTML = '';
                 return;
             }
-            
             let html = '<h3 style="margin-bottom: 12px; color: #3e3225;">Загруженные списки:</h3>';
             uploadedFiles.forEach((file, index) => {
                 html += `
@@ -294,7 +260,6 @@
             });
             fileList.innerHTML = html;
             
-            // Обновляем выпадающий список главного манускрипта
             let options = '<option value="">Выберите главный список</option>';
             uploadedFiles.forEach((file, index) => {
                 options += `<option value="${index}">${file.name}</option>`;
@@ -307,26 +272,6 @@
             renderFileList();
             updateUI();
         };
-
-        function detectDiffType(word1, word2) {
-            if (word1 === word2) return null;
-            
-            // Графические: разные буквы для одного звука (ѹ/у, ѡ/о)
-            const graphicPairs = [['ѹ', 'у'], ['ѡ', 'о'], ['ѣ', 'е'], ['ꙗ', 'я']];
-            for (let [old, new_] of graphicPairs) {
-                if (word1.replace(new RegExp(old, 'g'), new_) === word2.replace(new RegExp(old, 'g'), new_)) {
-                    return 'graphic';
-                }
-            }
-            
-            // Если слова разной длины на 1-2 буквы — морфологические
-            if (Math.abs(word1.length - word2.length) <= 2) {
-                return 'morph';
-            }
-            
-            // По умолчанию — лексические
-            return 'lexical';
-        }
         
         function updateUI() {
             alignBtn.disabled = uploadedFiles.length < 2;
@@ -334,6 +279,7 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
+        // Выравнивание
         alignBtn.addEventListener('click', async () => {
             if (uploadedFiles.length < 2) return;
             
@@ -358,11 +304,8 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Выравниваем по стихам
                     const mainMs = data.manuscripts[mainIndex];
                     const otherMss = data.manuscripts.filter((_, i) => i != mainIndex);
-                    
-                    // Собираем все номера стихов из главного списка
                     const verseNumbers = Object.keys(mainMs.verses).sort((a, b) => parseInt(a) - parseInt(b));
                     
                     alignedData = {
@@ -370,9 +313,7 @@
                         aligned: otherMss.map(m => m.name),
                         verses: verseNumbers.map(num => {
                             const texts = [mainMs.verses[num] || '—'];
-                            otherMss.forEach(ms => {
-                                texts.push(ms.verses[num] || '—');
-                            });
+                            otherMss.forEach(ms => texts.push(ms.verses[num] || '—'));
                             return { num, texts };
                         })
                     };
@@ -389,98 +330,27 @@
                 alignBtn.disabled = false;
             }
         });
-            
-            alignBtn.textContent = '⏳ Выравнивание...';
-            alignBtn.disabled = true;
-            
-            // Здесь будет вызов API для выравнивания
-            // Пока демо-режим
-            
-            setTimeout(() => {
-                alignedData = {
-                    main: uploadedFiles[mainIndex].name,
-                    aligned: uploadedFiles.filter((_, i) => i != mainIndex).map(f => f.name),
-                    verses: [
-                        { num: 11, texts: ['ч҃лвкъ нѣкъıи имѣ дъва сн҃а', 'человѣкъ нѣкто имѣ два сына'] },
-                        { num: 12, texts: ['и рече мьнии сн҃ъ оц҃ю', 'и рече юнѣишии сн҃ъ оц҃ю'] }
-                    ]
-                };
-                
-                renderAlignment();
-                alignBtn.textContent = '🔗 Выровнять списки';
-                alignBtn.disabled = false;
-                exportBtn.disabled = false;
-            }, 1500);
-        });
         
         function renderAlignment() {
             const container = document.getElementById('alignmentResult');
-            
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
-            html += '<table class="alignment-table">';
-            html += '<tr><th>Стих</th><th>' + alignedData.main + '</th>';
+            html += '<table class="alignment-table"><thead><tr><th>Стих</th><th>' + alignedData.main + '</th>';
             alignedData.aligned.forEach(name => html += '<th>' + name + '</th>');
-            html += '</tr>';
+            html += '</tr></thead><tbody>';
             
             alignedData.verses.forEach(verse => {
                 html += '<tr><td><strong>' + verse.num + '</strong></td>';
                 verse.texts.forEach(text => {
-                    html += '<td class="verse-text editable-cell">' + text;
-                    html += '<td class="verse-text">' + text;
+                    html += '<td class="verse-text editable-cell">' + escapeHtml(text);
                     // Добавляем метки разночтений (демо)
-                    if (text.includes('ч҃лвкъ')) {
-                        html += '<span class="diff-type diff-graphic">граф.</span>';
-                    }
-                    if (text.includes('мьнии')) {
-                        html += '<span class="diff-type diff-lexical">лекс.</span>';
-                    }
+                    if (text.includes('ч҃лвкъ')) html += '<span class="diff-type diff-graphic">граф.</span>';
+                    if (text.includes('мьнии')) html += '<span class="diff-type diff-lexical">лекс.</span>';
                     html += '</td>';
                 });
                 html += '</tr>';
             });
-
-            function makeEditable() {
-                document.querySelectorAll('.editable-cell').forEach(cell => {
-                    cell.addEventListener('dblclick', function() {
-                        const originalText = this.textContent;
-                        const input = document.createElement('input');
-                        input.value = originalText;
-                        input.style.width = '100%';
-                        input.style.padding = '4px';
-                        input.style.fontFamily = '"BukyVede", "Menaion Unicode", serif';
-                        input.style.fontSize = '16px';
-                        
-                        this.textContent = '';
-                        this.appendChild(input);
-                        input.focus();
-                        
-                        input.addEventListener('blur', () => {
-                            this.textContent = input.value || originalText;
-                            // Обновить alignedData
-                            updateAlignedData();
-                        });
-                        
-                        input.addEventListener('keypress', (e) => {
-                            if (e.key === 'Enter') {
-                                input.blur();
-                            }
-                        });
-                    });
-                });
-            }
             
-            function updateAlignedData() {
-                // Обновление alignedData после редактирования
-                const rows = document.querySelectorAll('.alignment-table tbody tr');
-                alignedData.verses.forEach((verse, rowIndex) => {
-                    const cells = rows[rowIndex].querySelectorAll('td');
-                    verse.texts = Array.from(cells).slice(1).map(cell => cell.textContent.trim());
-                });
-            }
-            
-            html += '</table>';
-            
-            // Кнопка сохранения сессии
+            html += '</tbody></table>';
             html += `
                 <div style="margin-top: 24px;">
                     <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
@@ -489,14 +359,47 @@
             `;
             
             container.innerHTML = html;
+            makeEditable();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function makeEditable() {
+            document.querySelectorAll('.editable-cell').forEach(cell => {
+                cell.addEventListener('dblclick', function() {
+                    const originalText = this.textContent;
+                    const input = document.createElement('input');
+                    input.value = originalText;
+                    this.textContent = '';
+                    this.appendChild(input);
+                    input.focus();
+                    
+                    input.addEventListener('blur', () => {
+                        this.textContent = input.value || originalText;
+                        updateAlignedData();
+                    });
+                    
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') input.blur();
+                    });
+                });
+            });
+        }
+        
+        function updateAlignedData() {
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            alignedData.verses.forEach((verse, rowIndex) => {
+                const cells = rows[rowIndex].querySelectorAll('td');
+                verse.texts = Array.from(cells).map(cell => cell.textContent.trim());
+            });
         }
         
         window.saveSession = function() {
-            const session = {
-                files: uploadedFiles.map(f => f.name),
-                aligned: alignedData,
-                timestamp: new Date().toISOString()
-            };
+            const session = { files: uploadedFiles.map(f => f.name), aligned: alignedData, timestamp: new Date().toISOString() };
             localStorage.setItem('corpusSession', JSON.stringify(session));
             alert('Сессия сохранена в браузере');
         };
@@ -506,7 +409,6 @@
             if (saved) {
                 const session = JSON.parse(saved);
                 alert('Загружена сессия от ' + session.timestamp + '\nФайлы: ' + session.files.join(', '));
-                // В реальной версии здесь будет восстановление состояния
             } else {
                 alert('Нет сохранённой сессии');
             }
@@ -515,66 +417,24 @@
         exportBtn.addEventListener('click', () => {
             if (!alignedData) return;
             
-            // Генерация XML-TEI
-            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-            xml += '<TEI xmlns="http://www.tei-c.org/ns/1.0">\n';
-            xml += '  <teiHeader>\n';
-            xml += '    <fileDesc>\n';
-            xml += '      <titleStmt>\n';
-            xml += '        <title>Параллельный корпус: Притча о блудном сыне</title>\n';
-            xml += '      </titleStmt>\n';
-            xml += '      <publicationStmt>\n';
-            xml += '        <p>Выровнено автоматически</p>\n';
-            xml += '      </publicationStmt>\n';
-            xml += '      <sourceDesc>\n';
-            xml += '        <listWit>\n';
-            xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
-            alignedData.aligned.forEach((name, i) => {
-                xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n';
-            });
-            xml += '        </listWit>\n';
-            xml += '      </sourceDesc>\n';
-            xml += '    </fileDesc>\n';
-            xml += '  </teiHeader>\n';
-            xml += '  <text>\n';
-            xml += '    <body>\n';
-            xml += '      <div type="chapter" n="15">\n';
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI xmlns="http://www.tei-c.org/ns/1.0">\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Притча о блудном сыне</title>\n      </titleStmt>\n      <publicationStmt>\n        <p>Выровнено автоматически</p>\n      </publicationStmt>\n      <sourceDesc>\n        <listWit>\n          <witness xml:id="main">' + alignedData.main + '</witness>\n';
+            alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
+            xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n      <div type="chapter" n="15">\n';
             
             alignedData.verses.forEach(verse => {
-                xml += '        <app>\n';
-                xml += '          <lem wit="#main">' + verse.texts[0] + '</lem>\n';
-                verse.texts.slice(1).forEach((text, i) => {
-                    xml += '          <rdg wit="#wit' + i + '">' + text + '</rdg>\n';
-                });
+                xml += '        <app>\n          <lem wit="#main">' + verse.texts[0] + '</lem>\n';
+                verse.texts.slice(1).forEach((text, i) => xml += '          <rdg wit="#wit' + i + '">' + text + '</rdg>\n');
                 xml += '        </app>\n';
             });
             
-            xml += '      </div>\n';
-            xml += '    </body>\n';
-            xml += '  </text>\n';
-            xml += '</TEI>';
+            xml += '      </div>\n    </body>\n  </text>\n</TEI>';
             
-            // Скачивание
             const blob = new Blob([xml], { type: 'application/xml' });
-            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
+            a.href = URL.createObjectURL(blob);
             a.download = 'parallel_corpus.xml';
             a.click();
-            URL.revokeObjectURL(url);
         });
-        
-        // Демо: загрузка примеров
-        window.loadDemo = function() {
-            alert('Демо-режим: имитация загрузки Остромирова и Архангельского Евангелий');
-            uploadedFiles = [
-                { name: 'EOstr_117-119.xml', size: 45000 },
-                { name: 'EArkh_72-73.xml', size: 42000 }
-            ];
-            renderFileList();
-            updateUI();
-            mainMsSelect.value = '0';
-        };
     </script>
 </body>
 </html>
