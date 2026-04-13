@@ -3,3 +3,4 @@ flask-cors==4.0.0
 werkzeug==3.0.1
 gunicorn==21.2.0
 SpeechRecognition==3.10.1
+standard-aifc==3.13.0
