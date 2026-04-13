@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Русские говоры Удмуртии</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; height: 100vh; display: flex; }
+        
+        /* Карта */
+        #map { flex: 2; height: 100vh; }
+        
+        /* Панель управления */
+        #panel {
+            flex: 1;
+            min-width: 380px;
+            max-width: 450px;
+            background: #ffffff;
+            box-shadow: -2px 0 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #panel-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            color: white;
+        }
+        
+        #panel-header h1 { font-size: 22px; margin-bottom: 5px; }
+        #panel-header p { font-size: 13px; opacity: 0.8; }
+        
+        #panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .section { margin-bottom: 25px; }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #7f8c8d;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #ecf0f1;
+            padding-bottom: 8px;
+        }
+        
+        /* Поиск */
+        .search-wrapper {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        #wordSearch {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border 0.2s;
+        }
+        
+        #wordSearch:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        #searchBtn {
+            padding: 12px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        #searchBtn:hover { background: #2980b9; }
+        
+        .search-hint { font-size: 12px; color: #95a5a6; margin-top: 5px; }
+        
+        /* Фильтры районов */
+        .filter-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        
+        .filter-btn {
+            padding: 6px 14px;
+            background: #ecf0f1;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn:hover { background: #bdc3c7; }
+        .filter-btn.active {
+            background: #2c3e50;
+            color: white;
+        }
+
+        /* Фильтр по регионам */
+        .region-filter-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .region-btn {
+            padding: 8px 16px;
+            background: #ecf0f1;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1 0 calc(50% - 6px);
+        }
+
+            .region-btn:hover {
+                background: #bdc3c7;
+            }
+
+            .region-btn.active {
+                background: #27ae60;
+                color: white;
+            }
+
+        /* Поиск по вопросам */
+        #questionSearch {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+            #questionSearch:focus {
+                outline: none;
+                border-color: #9b59b6;
+            }
+
+        /* Комментарии */
+        .comments-section {
+            margin-top: 15px;
+        }
+
+        #settlementComments {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            resize: vertical;
+            min-height: 60px;
+            font-family: inherit;
+        }
+
+        .save-comments-btn {
+            margin-top: 8px;
+            padding: 6px 12px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+            .save-comments-btn:hover {
+                background: #219a52;
+            }
+        
+        /* Карточка выбранного пункта */
+        .settlement-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .settlement-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+        
+        .settlement-district {
+            font-size: 13px;
+            color: #7f8c8d;
+            margin-bottom: 8px;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+        
+        /* Таблица ответов */
+        .answers-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        .answers-table th {
+            text-align: left;
+            padding: 10px 0 5px;
+            color: #7f8c8d;
+            font-weight: 500;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .answers-table td {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .answers-table tr:last-child td { border-bottom: none; }
+        
+        .question-code {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .ling-unit {
+            font-weight: 600;
+            color: #e74c3c;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #bdc3c7;
+        }
+        
+        .empty-state i { font-size: 40px; margin-bottom: 10px; }
+        
+        /* Статистика поиска */
+        .search-stats {
+            background: #e8f4fd;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        
+        /* Легенда */
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #ccc;
+        }
+
+        /* Управление изоглоссами */
+            
+        .isogloss-control {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .isogloss-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .isogloss-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+            .isogloss-item input {
+                margin-right: 8px;
+            }
+
+        .isogloss-color-line {
+            width: 20px;
+            height: 3px;
+            margin: 0 8px;
+        }
+
+        .isogloss-color-area {
+            width: 20px;
+            height: 12px;
+            margin: 0 8px;
+            opacity: 0.3;
+            border: 1px solid;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div id="panel">
+        <div id="panel-header">
+            <h1>🗺️ Атлас русских говоров</h1>
+            <p>Удмуртия и прилегающие регионы</p>
+        </div>
+        
+        <div id="panel-content">
+            <!-- Поиск по лингвистической единице -->
+            <div class="section">
+                <div class="section-title">🔍 Поиск по лексеме</div>
+                <div class="search-wrapper">
+                    <input type="text" id="wordSearch" placeholder="Введите слово... (орать, кочет, кушак)">
+                    <button id="searchBtn">Найти</button>
+                </div>
+                <button id="resetSearchBtn" style="width:100%; padding:8px; background:#95a5a6; color:white; border:none; border-radius:6px; cursor:pointer;">Сбросить поиск</button>
+                <div class="search-hint">Поиск по полям ling_unit_1 и ling_unit_2</div>
+                <div id="searchStats" class="search-stats" style="display:none;"></div>
+            </div>
+
+            <!-- Поиск по вопросам -->
+            <div class="section">
+                <div class="section-title">❓ Поиск по вопросам ЛАРНГ</div>
+                <input type="text" id="questionSearch" placeholder="Введите текст вопроса... (глагол, петух, пояс)">
+                <button id="resetQuestionSearchBtn" style="width:100%; padding:6px; margin-top:8px; background:#95a5a6; color:white; border:none; border-radius:4px; cursor:pointer;">Сбросить поиск по вопросам</button>
+                <div id="questionSearchStats" class="search-stats" style="display:none; margin-top:10px;"></div>
+            </div>
+
+            <!-- Фильтр по районам -->
+            <div class="section">
+                <div class="section-title">📍 Фильтр по району</div>
+                <div id="districtFilters" class="filter-buttons">
+                    <!-- Кнопки добавятся через JS -->
+                </div>
+            </div>
+
+            <!-- Фильтр по регионам -->
+            <div class="section">
+                <div class="section-title">🌍 Фильтр по региону</div>
+                <div id="regionFiltersContainer" class="region-filter-buttons">
+                    <button class="region-btn active" data-region="all">Все регионы</button>
+                    <button class="region-btn" data-region="Удмуртия">Удмуртия</button>
+                    <button class="region-btn" data-region="Кировская обл.">Кировская обл.</button>
+                    <button class="region-btn" data-region="Татарстан">Татарстан</button>
+                </div>
+            </div>
+
+            <!-- Легенда -->
+            <div class="section">
+                <div class="section-title">📊 Легенда</div>
+                <div class="legend">
+                    <div class="legend-item"><span class="legend-color" style="background:#3498db;"></span> Обычный пункт</div>
+                    <div class="legend-item"><span class="legend-color" style="background:#ffc107;"></span> Найдена лексема</div>
+                    <div class="legend-item"><span class="legend-color" style="background:#e74c3c;"></span> Выбранный пункт</div>
+                </div>
+            </div>
+
+            <!-- Изоглоссы -->
+            <div class="section">
+                <div class="section-title">📈 Изоглоссы и ареалы</div>
+                <div class="isogloss-control">
+                    <div class="isogloss-title">Лексические изоглоссы</div>
+                    <div class="isogloss-item">
+                        <input type="checkbox" id="chkOrat" checked onchange="toggleIsogloss('orat')">
+                        <span class="isogloss-color-area" style="background:#e74c3c; border-color:#c0392b;"></span>
+                        <span style="flex:1">"орать" / "пахать"</span>
+                        <span style="font-size:11px; color:#7f8c8d;">север/юг</span>
+                    </div>
+                    <div class="isogloss-item">
+                        <input type="checkbox" id="chkKochet" checked onchange="toggleIsogloss('kochet')">
+                        <span class="isogloss-color-area" style="background:#3498db; border-color:#2980b9;"></span>
+                        <span style="flex:1">"кочет" / "петух"</span>
+                        <span style="font-size:11px; color:#7f8c8d;">север/юг</span>
+                    </div>
+                    <div class="isogloss-item">
+                        <input type="checkbox" id="chkKushak" checked onchange="toggleIsogloss('kushak')">
+                        <span class="isogloss-color-area" style="background:#2ecc71; border-color:#27ae60;"></span>
+                        <span style="flex:1">"кушак" (пояс)</span>
+                        <span style="font-size:11px; color:#7f8c8d;">северо-восток</span>
+                    </div>
+                </div>
+                <div style="font-size:11px; color:#95a5a6; margin-top:8px;">
+                    ✓ Отметьте для отображения ареалов
+                </div>
+            </div>
+
+            <!-- Карточка выбранного пункта -->
+            <div class="section">
+                <div class="section-title">📌 Выбранный пункт</div>
+                <div id="settlementCard" class="settlement-card">
+                    <div class="settlement-name">—</div>
+                    <div class="settlement-district">Нажмите на точку на карте</div>
+                    <div id="settlementRegion" style="font-size:12px; color:#7f8c8d; margin-top:4px;"></div>
+                    <span class="badge" id="answersCount">0 ответов</span>
+
+                    <!-- Комментарии -->
+                    <div class="comments-section">
+                        <label style="font-size:12px; font-weight:600; color:#7f8c8d;">💬 Комментарий к пункту</label>
+                        <textarea id="settlementComments" placeholder="Добавьте заметку о диалектных особенностях..."></textarea>
+                        <button class="save-comments-btn" onclick="saveComments()">💾 Сохранить</button>
+                        <span id="saveStatus" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Таблица с ответами -->
+            <div class="section">
+                <div class="section-title">📋 Ответы на вопросы ЛАРНГ</div>
+                <div id="answersContainer">
+                    <table class="answers-table" id="answersTable">
+                        <thead>
+                            <tr>
+                                <th>Код</th>
+                                <th>Вопрос</th>
+                                <th>Лексема</th>
+                            </tr>
+                        </thead>
+                        <tbody id="answersBody">
+                            <tr><td colspan="3"><div class="empty-state">👆 Выберите населенный пункт</div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Инструкция -->
+            <div class="section">
+                <div class="section-title">ℹ️ Инструкция</div>
+                <ul style="font-size:12px; color:#7f8c8d; padding-left:20px; line-height:1.6;">
+                    <li>🔹 Кликните на точку — просмотр диалектных данных</li>
+                    <li>🔹 Введите слово — подсветка ареала распространения</li>
+                    <li>🔹 Кнопки районов — фильтрация по территории</li>
+                    <li>🔹 Галочки "Изоглоссы" — отображение ареалов и границ</li>
+                    <li>🔹 Данные обновляются через Google Таблицу</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <script>
+        // ==================== КОНФИГУРАЦИЯ ====================
+        // ЗАМЕНИТЕ НА ВАШУ ССЫЛКУ ИЗ GOOGLE SHEETS
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAnAl8nY0SPxtmas14sGCCeRlLbR-4-pG91HC82rwSPpLIgCxSJVj0ePNI_K7sulRBa8SUl3e4Tgc/pub?output=csv';
+        
+        // Координаты населенных пунктов (добавьте свои по необходимости)
+        const settlements = [
+            // Удмуртия
+            { name: "Яр", displayName: "с. Яр", district: "Ярский", region: "Удмуртия", lat: 58.246, lng: 52.102 },
+            { name: "Елово", displayName: "д. Елово", district: "Ярский", region: "Удмуртия", lat: 58.312, lng: 52.211 },
+            { name: "Малая Пурга", displayName: "с. Малая Пурга", district: "Малопургинский", region: "Удмуртия", lat: 56.558, lng: 53.009 },
+            { name: "Бураново", displayName: "д. Бураново", district: "Малопургинский", region: "Удмуртия", lat: 56.589, lng: 53.218 },
+            { name: "Дебёсы", displayName: "с. Дебёсы", district: "Дебёсский", region: "Удмуртия", lat: 57.652, lng: 53.809 },
+            { name: "Воткинск", displayName: "г. Воткинск", district: "Воткинский", region: "Удмуртия", lat: 57.051, lng: 53.987 },
+            { name: "Глазов", displayName: "г. Глазов", district: "Глазовский", region: "Удмуртия", lat: 58.139, lng: 52.659 },
+            { name: "Красногорское", displayName: "с. Красногорское", district: "Красногорский", region: "Удмуртия", lat: 57.708, lng: 52.502 },
+            { name: "Каракулино", displayName: "с. Каракулино", district: "Каракулинский", region: "Удмуртия", lat: 56.012, lng: 53.705 },
+            { name: "Можга", displayName: "г. Можга", district: "Можгинский", region: "Удмуртия", lat: 56.444, lng: 52.214 },
+            { name: "Алнаши", displayName: "с. Алнаши", district: "Алнашский", region: "Удмуртия", lat: 56.186, lng: 52.477 },
+            // Кировская область
+            { name: "Фалёнки", displayName: "пгт Фалёнки", district: "Фалёнский", region: "Кировская обл.", lat: 58.361, lng: 51.595 },
+            { name: "Уни", displayName: "пгт Уни", district: "Унинский", region: "Кировская обл.", lat: 57.751, lng: 51.492 },
+            { name: "Богородское", displayName: "с. Богородское", district: "Богородский", region: "Кировская обл.", lat: 57.828, lng: 50.748 },
+            { name: "Зуевка", displayName: "г. Зуевка", district: "Зуевский", region: "Кировская обл.", lat: 58.403, lng: 51.133 },
+            { name: "Кильмезь", displayName: "пгт Кильмезь", district: "Кильмезский", region: "Кировская обл.", lat: 56.944, lng: 51.067 },
+            { name: "Вятские Поляны", displayName: "г. Вятские Поляны", district: "Вятскополянский", region: "Кировская обл.", lat: 56.226, lng: 51.065 },
+            // Татарстан
+            { name: "Красный Бор", displayName: "с. Красный Бор", district: "Агрызский", region: "Татарстан", lat: 56.285, lng: 52.845 },
+            { name: "Агрыз", displayName: "г. Агрыз", district: "Агрызский", region: "Татарстан", lat: 56.520, lng: 52.994 },
+            { name: "Кукмор", displayName: "с. Кукмор", district: "Кукморский", region: "Татарстан", lat: 56.185, lng: 50.894 },
+            { name: "Менделеевск", displayName: "г. Менделеевск", district: "Менделеевский", region: "Татарстан", lat: 55.901, lng: 52.319 },
+            { name: "Елабуга", displayName: "г. Елабуга", district: "Елабужский", region: "Татарстан", lat: 55.756, lng: 52.054 },
+            { name: "Мамадыш", displayName: "с. Мамадыш", district: "Мамадышский", region: "Татарстан", lat: 55.715, lng: 51.412 }
+        ];
+        
+        // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
+        let dialectData = [];
+        let map;
+        let markersLayer;
+        let currentSearchTerm = '';
+        let currentDistrict = 'all';
+        let selectedSettlement = null;
+        
+        // ==================== ИНИЦИАЛИЗАЦИЯ КАРТЫ ====================
+        function initMap() {
+            map = L.map('map').setView([57.0, 52.8], 7);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors | Лабораторная работа'
+            }).addTo(map);
+            
+            // Добавляем подложку с рельефом (ландшафт)
+            L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                opacity: 0.3,
+                attribution: '© OpenTopoMap'
+            }).addTo(map);
+            
+            markersLayer = L.layerGroup().addTo(map);
+        }
+        
+        // ==================== ЗАГРУЗКА ДАННЫХ ====================
+        function loadData() {
+            // Ссылка на вашу опубликованную Google Таблицу в формате CSV
+            const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAnAl8nY0SPxtmas14sGCCeRlLbR-4-pG91HC82rwSPpLIgCxSJVj0ePNI_K7sulRBa8SUl3e4Tgc/pub?output=csv';
+
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function (results) {
+                    dialectData = results.data.filter(row => row.settlement && row.region);
+                    console.log(`Загружено ${dialectData.length} записей из Google Sheets`);
+                    initDistrictFilters();
+                    renderMarkers();
+                },
+                error: function (err) {
+                    console.error('❌ Ошибка загрузки CSV:', err);
+                    // Запасной вариант — тестовые данные
+                    console.log('🔄 Использую тестовые данные...');
+                    dialectData = [
+                        { region: "Удмуртия", district: "Ярский", settlement: "с. Яр", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "орать", ling_unit_2: "пахать" },
+                        { region: "Удмуртия", district: "Ярский", settlement: "д. Елово", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "орать", ling_unit_2: "" },
+                        { region: "Удмуртия", district: "Ярский", settlement: "д. Елово", question_code: "L 312", question_text: "Петух", ling_unit_1: "кочет", ling_unit_2: "петун" },
+                        { region: "Удмуртия", district: "Малопургинский", settlement: "с. Малая Пурга", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "пахать", ling_unit_2: "" },
+                        { region: "Удмуртия", district: "Малопургинский", settlement: "д. Бураново", question_code: "L 312", question_text: "Петух", ling_unit_1: "петух", ling_unit_2: "" },
+                        { region: "Удмуртия", district: "Дебёсский", settlement: "с. Дебёсы", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "орать", ling_unit_2: "" },
+                        { region: "Удмуртия", district: "Дебёсский", settlement: "с. Дебёсы", question_code: "L 504", question_text: "Пояс", ling_unit_1: "кушак", ling_unit_2: "опояска" },
+                        { region: "Удмуртия", district: "Воткинский", settlement: "г. Воткинск", question_code: "L 312", question_text: "Петух", ling_unit_1: "кочет", ling_unit_2: "" },
+                        { region: "Кировская обл.", district: "Фалёнский", settlement: "пгт Фалёнки", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "орать", ling_unit_2: "" },
+                        { region: "Татарстан", district: "Агрызский", settlement: "с. Красный Бор", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "пахать", ling_unit_2: "сабанить" }
+                    ];
+                    initDistrictFilters();
+                    renderMarkers();
+                }
+            });
+        }
+        
+        // ==================== ОТРИСОВКА МАРКЕРОВ ====================
+        function renderMarkers() {
+            markersLayer.clearLayers();
+
+            settlements.forEach(settlement => {
+                // Фильтр по району
+                if (currentDistrict !== 'all' && settlement.district !== currentDistrict) {
+                    return;
+                }
+
+                // Фильтр по региону (используем поле region из координат)
+                if (currentRegion !== 'all' && settlement.region !== currentRegion) {
+                    return;
+                }
+
+                // Проверяем поиск по лексеме
+                let isSearchMatch = true;
+                if (currentSearchTerm) {
+                    const settlementRecords = dialectData.filter(r => r.settlement === settlement.name);
+                    isSearchMatch = settlementRecords.some(rec =>
+                        (rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().includes(currentSearchTerm)) ||
+                        (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().includes(currentSearchTerm))
+                    );
+                    if (!isSearchMatch) return;
+                }
+
+                // Проверяем поиск по вопросам
+                if (currentQuestionSearch) {
+                    const settlementRecords = dialectData.filter(r => r.settlement === settlement.name);
+                    const hasQuestion = settlementRecords.some(rec =>
+                        rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)
+                    );
+                    if (!hasQuestion) return;
+                }
+
+                // Определяем цвет маркера
+                let fillColor = '#3498db';
+                let radius = 8;
+
+                if (currentSearchTerm) {
+                    fillColor = '#ffc107';
+                    radius = 11;
+                }
+
+                if (selectedSettlement === settlement.name) {
+                    fillColor = '#e74c3c';
+                    radius = 11;
+                }
+
+                const marker = L.circleMarker([settlement.lat, settlement.lng], {
+                    radius: radius,
+                    fillColor: fillColor,
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                });
+
+                const records = dialectData.filter(r => r.settlement === settlement.name);
+                const uniqueWords = [...new Set(records.map(r => r.ling_unit_1).filter(Boolean))].slice(0, 3);
+
+                marker.bindPopup(`
+                    <b>${settlement.displayName || settlement.name}</b><br>
+                    <i>${settlement.district} район</i><br>
+                    ${uniqueWords.length ? '<small>Лексемы: ' + uniqueWords.join(', ') + '</small>' : '<small>Нет данных</small>'}
+                    <br><button onclick="selectSettlement('${settlement.name}')" style="margin-top:8px; padding:4px 12px; background:#3498db; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">📖 Показать анкету</button>
+                `);
+
+                marker.on('click', () => selectSettlement(settlement.name));
+                marker.addTo(markersLayer);
+            });
+
+            updateSearchStats();
+        }
+        
+        
+        
+        // ==================== ФИЛЬТРЫ ПО РАЙОНАМ ====================
+        function initDistrictFilters() {
+            const districts = [...new Set(settlements.map(s => s.district))].sort();
+            const container = document.getElementById('districtFilters');
+            
+            let html = '<button class="filter-btn active" data-district="all">Все районы</button>';
+            districts.forEach(d => {
+                html += `<button class="filter-btn" data-district="${d}">${d}</button>`;
+            });
+            container.innerHTML = html;
+            
+            // Навешиваем обработчики
+            container.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentDistrict = btn.dataset.district;
+                    renderMarkers();
+                });
+            });
+        }
+        
+        // ==================== ПОИСК ПО ЛЕКСЕМЕ ====================
+        function performSearch() {
+            const term = document.getElementById('wordSearch').value.trim().toLowerCase();
+            currentSearchTerm = term;
+            
+            if (!term) {
+                document.getElementById('searchStats').style.display = 'none';
+            }
+            
+            renderMarkers();
+        }
+        
+        function resetSearch() {
+            document.getElementById('wordSearch').value = '';
+            currentSearchTerm = '';
+            document.getElementById('searchStats').style.display = 'none';
+            renderMarkers();
+        }
+        
+        function updateSearchStats() {
+            if (!currentSearchTerm) {
+                document.getElementById('searchStats').style.display = 'none';
+                return;
+            }
+            
+            // Подсчет населенных пунктов с лексемой
+            const matchedSettlements = new Set();
+            dialectData.forEach(rec => {
+                if ((rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().includes(currentSearchTerm)) ||
+                    (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().includes(currentSearchTerm))) {
+                    matchedSettlements.add(rec.settlement);
+                }
+            });
+            
+            document.getElementById('searchStats').innerHTML = `
+                🔎 Лексема <strong>"${currentSearchTerm}"</strong> найдена в 
+                <strong>${matchedSettlements.size}</strong> населенных пунктах
+            `;
+            document.getElementById('searchStats').style.display = 'block';
+        }
+
+        // ==================== ИЗОГЛОССЫ ====================
+        let isoglossLayers = {
+            orat: null,
+            kochet: null,
+            kushak: null
+        };
+
+        // Координаты для полигонов (ареалы)
+        const isoglossPolygons = {
+            // Ареал "орать" (север Удмуртии + Кировская обл.)
+            orat: [
+                [58.8, 51.5], // северо-запад (Киров)
+                [58.8, 54.0], // северо-восток (Глазов)
+                [57.5, 54.0], // восток (Дебёсы)
+                [57.0, 53.0], // юго-восток
+                [56.5, 52.0], // юг
+                [57.0, 51.0], // юго-запад
+                [58.8, 51.5]  // обратно
+            ],
+            // Ареал "кочет" (северная часть)
+            kochet: [
+                [58.6, 51.8],
+                [58.6, 54.0],
+                [57.8, 54.0],
+                [57.8, 53.5],
+                [57.5, 53.0],
+                [57.8, 51.8],
+                [58.6, 51.8]
+            ],
+            // Ареал "кушак" (северо-восток Удмуртии)
+            kushak: [
+                [58.2, 52.8],
+                [58.2, 54.0],
+                [57.5, 54.0],
+                [57.3, 53.5],
+                [57.5, 52.8],
+                [58.2, 52.8]
+            ]
+        };
+
+        // Линии изоглосс
+        const isoglossLines = {
+            // Граница орать/пахать
+            orat: [
+                [58.0, 51.3],
+                [57.8, 51.8],
+                [57.5, 52.2],
+                [57.2, 52.8],
+                [56.8, 53.2],
+                [56.5, 53.5],
+                [56.3, 54.0]
+            ],
+            // Граница кочет/петух
+            kochet: [
+                [58.3, 51.5],
+                [58.0, 52.0],
+                [57.7, 52.5],
+                [57.5, 53.0],
+                [57.3, 53.5],
+                [57.5, 54.0]
+            ],
+            // Граница кушака
+            kushak: [
+                [58.0, 52.5],
+                [57.8, 53.0],
+                [57.5, 53.3],
+                [57.2, 53.5]
+            ]
+        };
+
+        function drawIsogloss(type) {
+            const layerGroup = L.layerGroup();
+
+            // Полигон (ареал)
+            if (isoglossPolygons[type]) {
+                L.polygon(isoglossPolygons[type], {
+                    color: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71'),
+                    weight: 1,
+                    opacity: 0.6,
+                    fillOpacity: 0.15,
+                    fillColor: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71')
+                }).bindPopup(`
+                    <b>${type === 'orat' ? 'Ареал "орать"' : (type === 'kochet' ? 'Ареал "кочет"' : 'Ареал "кушак"')}</b><br>
+                    <small>Севернорусские говоры</small>
+                `).addTo(layerGroup);
+            }
+
+            // Линия изоглоссы
+            if (isoglossLines[type]) {
+                L.polyline(isoglossLines[type], {
+                    color: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71'),
+                    weight: 3,
+                    opacity: 0.8,
+                    dashArray: '8, 6',
+                    className: 'isogloss-line'
+                }).bindPopup(`
+                    <b>Изоглосса: ${type === 'orat' ? 'орать/пахать' : (type === 'kochet' ? 'кочет/петух' : 'кушак/пояс')}</b><br>
+                    <small>Граница распространения лексемы</small>
+                `).addTo(layerGroup);
+            }
+
+            // Добавляем подписи к ареалам
+            if (type === 'orat') {
+                L.marker([58.2, 52.5], {
+                    icon: L.divIcon({
+                        className: 'isogloss-label',
+                        html: '<span style="background:rgba(231,76,60,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">орать</span>',
+                        iconSize: [60, 20]
+                    })
+                }).addTo(layerGroup);
+
+                L.marker([56.5, 52.8], {
+                    icon: L.divIcon({
+                        className: 'isogloss-label',
+                        html: '<span style="background:rgba(52,152,219,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">пахать</span>',
+                        iconSize: [60, 20]
+                    })
+                }).addTo(layerGroup);
+            }
+
+            if (type === 'kochet') {
+                L.marker([58.0, 53.0], {
+                    icon: L.divIcon({
+                        className: 'isogloss-label',
+                        html: '<span style="background:rgba(52,152,219,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">кочет</span>',
+                        iconSize: [55, 20]
+                    })
+                }).addTo(layerGroup);
+
+                L.marker([56.8, 53.0], {
+                    icon: L.divIcon({
+                        className: 'isogloss-label',
+                        html: '<span style="background:rgba(46,204,113,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">петух</span>',
+                        iconSize: [55, 20]
+                    })
+                }).addTo(layerGroup);
+            }
+
+            if (type === 'kushak') {
+                L.marker([57.8, 53.2], {
+                    icon: L.divIcon({
+                        className: 'isogloss-label',
+                        html: '<span style="background:rgba(46,204,113,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">кушак</span>',
+                        iconSize: [55, 20]
+                    })
+                }).addTo(layerGroup);
+            }
+
+            return layerGroup;
+        }
+
+        window.toggleIsogloss = function (type) {
+            const checkbox = document.getElementById(`chk${type.charAt(0).toUpperCase() + type.slice(1)}`);
+
+            if (checkbox.checked) {
+                if (!isoglossLayers[type]) {
+                    isoglossLayers[type] = drawIsogloss(type);
+                }
+                isoglossLayers[type].addTo(map);
+            } else {
+                if (isoglossLayers[type]) {
+                    map.removeLayer(isoglossLayers[type]);
+                }
+            }
+        };
+
+        function initIsoglosses() {
+            // Включаем все изоглоссы по умолчанию
+            setTimeout(() => {
+                toggleIsogloss('orat');
+                toggleIsogloss('kochet');
+                toggleIsogloss('kushak');
+            }, 500);
+        }
+
+        // ==================== ФИЛЬТР ПО РЕГИОНАМ ====================
+        let currentRegion = 'all';
+        let commentsData = {}; // Хранилище комментариев
+
+        function initRegionFilters() {
+            document.querySelectorAll('.region-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentRegion = btn.dataset.region;
+                    renderMarkers();
+                });
+            });
+        }
+
+        // ==================== ПОИСК ПО ВОПРОСАМ ====================
+        let currentQuestionSearch = '';
+
+        function filterByQuestion() {
+            const term = document.getElementById('questionSearch').value.trim().toLowerCase();
+            currentQuestionSearch = term;
+
+            if (!term) {
+                document.getElementById('questionSearchStats').style.display = 'none';
+            }
+
+            renderMarkers();
+            updateQuestionSearchStats();
+        }
+
+        function resetQuestionSearch() {
+            document.getElementById('questionSearch').value = '';
+            currentQuestionSearch = '';
+            document.getElementById('questionSearchStats').style.display = 'none';
+            renderMarkers();
+        }
+
+        function updateQuestionSearchStats() {
+            if (!currentQuestionSearch) {
+                document.getElementById('questionSearchStats').style.display = 'none';
+                return;
+            }
+
+            const matchedSettlements = new Set();
+            dialectData.forEach(rec => {
+                if (rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)) {
+                    matchedSettlements.add(rec.settlement);
+                }
+            });
+
+            document.getElementById('questionSearchStats').innerHTML = `
+                🔍 Вопросы с "${currentQuestionSearch}" найдены в 
+                <strong>${matchedSettlements.size}</strong> населенных пунктах
+            `;
+            document.getElementById('questionSearchStats').style.display = 'block';
+        }
+
+        // ==================== КОММЕНТАРИИ ====================
+        function loadComments() {
+            const saved = localStorage.getItem('dialectComments');
+            if (saved) {
+                commentsData = JSON.parse(saved);
+            }
+        }
+
+        window.saveComments = function () {
+            if (!selectedSettlement) {
+                alert('Сначала выберите населенный пункт');
+                return;
+            }
+
+            const comment = document.getElementById('settlementComments').value;
+            commentsData[selectedSettlement] = comment;
+            localStorage.setItem('dialectComments', JSON.stringify(commentsData));
+
+            document.getElementById('saveStatus').textContent = '✓ Сохранено';
+            setTimeout(() => {
+                document.getElementById('saveStatus').textContent = '';
+            }, 2000);
+        };
+
+        // Обновленная функция выбора пункта (с регионами и комментариями)
+        window.selectSettlement = function (settlementName) {
+            selectedSettlement = settlementName;
+            const settlement = settlements.find(s => s.name === settlementName);
+
+            // Регион берем из координат (если есть) или из данных
+            const region = settlement.region || (dialectData.find(r => r.settlement === settlementName)?.region) || '—';
+
+            // Обновляем карточку
+            const records = dialectData.filter(r => r.settlement === settlementName);
+
+            document.getElementById('settlementCard').innerHTML = `
+                <div class="settlement-name">${settlement.displayName || settlement.name}</div>
+                <div class="settlement-district">${settlement.district} район</div>
+                <div id="settlementRegion" style="font-size:12px; color:#7f8c8d; margin-top:4px;">Регион: ${region}</div>
+                <span class="badge" id="answersCount">${records.length} ответов</span>
+                
+                <div class="comments-section">
+                    <label style="font-size:12px; font-weight:600; color:#7f8c8d;">💬 Комментарий к пункту</label>
+                    <textarea id="settlementComments" placeholder="Добавьте заметку о диалектных особенностях...">${commentsData[settlementName] || ''}</textarea>
+                    <button class="save-comments-btn" onclick="saveComments()">💾 Сохранить</button>
+                    <span id="saveStatus" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
+                </div>
+            `;
+
+            // Обновляем таблицу
+            const tbody = document.getElementById('answersBody');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state">📭 Нет данных по этому пункту</div></td></tr>';
+            } else {
+                // Фильтруем по поиску вопроса, если есть
+                let displayRecords = records;
+                if (currentQuestionSearch) {
+                    displayRecords = records.filter(rec =>
+                        rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)
+                    );
+                }
+
+                if (displayRecords.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state">🔍 Нет вопросов по запросу</div></td></tr>';
+                } else {
+                    tbody.innerHTML = displayRecords.map(rec => `
+                        <tr>
+                            <td><span class="question-code">${rec.question_code || '—'}</span></td>
+                            <td>${rec.question_text || '—'}</td>
+                            <td>
+                                <span class="ling-unit">${rec.ling_unit_1 || '—'}</span>
+                                ${rec.ling_unit_2 ? '<br><span style="color:#95a5a6; font-size:12px;">' + rec.ling_unit_2 + '</span>' : ''}
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            }
+
+            renderMarkers();
+        };
+
+        // ==================== ЗАПУСК ====================
+        window.onload = function () {
+            initMap();
+            loadComments();
+            loadData();
+            initIsoglosses();
+            initRegionFilters();
+
+            // Обработчики событий
+            document.getElementById('searchBtn').addEventListener('click', performSearch);
+            document.getElementById('resetSearchBtn').addEventListener('click', resetSearch);
+            document.getElementById('wordSearch').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') performSearch();
+            });
+
+            // Поиск по вопросам
+            document.getElementById('questionSearch').addEventListener('input', filterByQuestion);
+            document.getElementById('resetQuestionSearchBtn').addEventListener('click', resetQuestionSearch);
+        };
+    </script>
+</body>
+</html>
