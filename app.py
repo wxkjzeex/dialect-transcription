@@ -4,6 +4,7 @@ import subprocess
 import speech_recognition as sr
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
 CORS(app)
@@ -74,6 +75,48 @@ def map_page():
 @app.route('/corpus')
 def corpus_page():
     return render_template('corpus.html')
+
+@app.route('/upload_corpus', methods=['POST'])
+def upload_corpus():
+    if 'files' not in request.files:
+        return jsonify({'error': 'Нет файлов'}), 400
+    
+    files = request.files.getlist('files')
+    parsed_manuscripts = []
+    
+    for file in files:
+        if file.filename.endswith('.xml'):
+            try:
+                tree = ET.parse(file)
+                root = tree.getroot()
+                
+                # Извлекаем текст по стихам (ищем ab с атрибутом n)
+                verses = {}
+                ns = {'tei': 'http://www.tei-c.org/ns/1.0'}
+                
+                # Пробуем с namespace и без
+                for ab in root.findall('.//ab[@n]'):
+                    verse_num = ab.get('n')
+                    verse_text = ' '.join(ab.itertext()).strip()
+                    if verse_num and verse_text:
+                        verses[verse_num] = verse_text
+                
+                if not verses:
+                    for ab in root.findall('.//{http://www.tei-c.org/ns/1.0}ab[@n]'):
+                        verse_num = ab.get('n')
+                        verse_text = ' '.join(ab.itertext()).strip()
+                        if verse_num and verse_text:
+                            verses[verse_num] = verse_text
+                
+                parsed_manuscripts.append({
+                    'name': file.filename,
+                    'verses': verses,
+                    'verse_count': len(verses)
+                })
+            except Exception as e:
+                return jsonify({'error': f'Ошибка парсинга {file.filename}: {str(e)}'}), 400
+    
+    return jsonify({'manuscripts': parsed_manuscripts})
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
