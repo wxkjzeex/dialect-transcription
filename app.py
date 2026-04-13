@@ -67,6 +67,10 @@ def text_to_phonetic(text):
 def index():
     return render_template('index.html')
 
+@app.route('/map')
+def map_page():
+    return render_template('map.html')
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     if 'audio' not in request.files:
