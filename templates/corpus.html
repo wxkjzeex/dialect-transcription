@@ -427,6 +427,7 @@
             
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
             html += `<p style="margin-bottom: 16px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += '<p style="margin-bottom: 16px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
             html += '<table class="alignment-table"><thead><tr><th>Стих</th><th>' + alignedData.main + '</th>';
             alignedData.aligned.forEach(name => html += '<th>' + name + '</th>');
             html += '</tr></thead><tbody>';
@@ -441,23 +442,17 @@
             
             html += '</tbody></table>';
             html += `
-                <div style="margin-top: 24px;">
-                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
-                    <button class="btn btn-secondary" onclick="loadSession()" style="margin-left: 12px;">📂 Загрузить сессию</button>
-                </div>
-            `;
-            html += `
-                <div style="margin-top: 24px; display: flex; gap: 12px;">
+                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
                     <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
                     <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
-                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('Изменения сохранены в текущей сессии')">✏️ Зафиксировать правки</button>
+                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
                 </div>
             `;
             container.innerHTML = html;
-    
-                // Добавляем редактирование
-                makeEditable();
-            }
+            
+            // Включаем редактирование
+            makeEditable();
+        }
         
         function escapeHtml(text) {
             const div = document.createElement('div');
