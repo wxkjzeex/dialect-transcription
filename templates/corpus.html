@@ -192,7 +192,62 @@
         .alignment-table .hidden-column {
             display: none;
         }
-        
+                /* Drag & Drop для колонок */
+        .alignment-table th.draggable {
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            padding-right: 28px !important;
+        }
+        .alignment-table th.draggable:hover {
+            background: #d4c5b0;
+        }
+        .alignment-table th.draggable:active {
+            cursor: grabbing;
+        }
+        .alignment-table th.draggable::after {
+            content: "⋮⋮";
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8b7355;
+            font-size: 16px;
+            letter-spacing: 2px;
+            opacity: 0.6;
+        }
+        .alignment-table th.drag-over {
+            border-left: 3px solid #b89a7a !important;
+            background: #e8ddd0;
+        }
+        .alignment-table th.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        /* Кнопки управления порядком (альтернатива drag & drop) */
+        .column-order-controls {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+        }
+        .order-btn {
+            padding: 2px 6px;
+            background: #d4c5b0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #3e3225;
+            transition: all 0.2s;
+        }
+        .order-btn:hover {
+            background: #b89a7a;
+            color: white;
+        }
+        .order-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -241,6 +296,7 @@
         let uploadedFiles = [];
         let manuscripts = [];  // [{ name, fullText, sheets }]
         let columnVisibility = []; // true = показывать, false = скрыть
+        let columnOrder = []; // индексы в порядке отображения
         let alignedData = null;
         
         const dropZone = document.getElementById('dropZone');
@@ -471,7 +527,7 @@
                 })
             };
             
-            renderAlignment();
+            renderOrderedTable();
             exportBtn.disabled = false;
         });
 
@@ -480,7 +536,6 @@
             
             const allColumns = [alignedData.main, ...alignedData.aligned];
             
-            // Инициализируем видимость (все показываем)
             if (columnVisibility.length !== allColumns.length) {
                 columnVisibility = allColumns.map(() => true);
             }
@@ -489,6 +544,7 @@
             html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
             html += '<div class="column-toggles-list">';
             
+            // Показываем в исходном порядке (по индексам)
             allColumns.forEach((name, index) => {
                 const checked = columnVisibility[index] ? 'checked' : '';
                 const isMain = index === 0;
@@ -519,33 +575,247 @@
             const table = document.querySelector('.alignment-table');
             if (!table) return;
             
-            // Скрываем/показываем заголовки
-            const headers = table.querySelectorAll('thead th');
+            // Получаем все заголовки (кроме первого "Стих")
+            const headers = table.querySelectorAll('thead th:not(:first-child)');
+            
             headers.forEach((th, idx) => {
-                if (idx > 0 && idx <= columnVisibility.length) {
-                    if (columnVisibility[idx - 1]) {
-                        th.classList.remove('hidden-column');
-                    } else {
-                        th.classList.add('hidden-column');
-                    }
+                const colIndex = parseInt(th.dataset.colIndex);
+                if (!columnVisibility[colIndex]) {
+                    th.classList.add('hidden-column');
+                } else {
+                    th.classList.remove('hidden-column');
                 }
             });
             
             // Скрываем/показываем ячейки
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
+                const cells = row.querySelectorAll('td:not(:first-child)');
                 cells.forEach((td, idx) => {
-                    if (idx > 0 && idx <= columnVisibility.length) {
-                        if (columnVisibility[idx - 1]) {
-                            td.classList.remove('hidden-column');
-                        } else {
+                    const headerForCell = headers[idx];
+                    if (headerForCell) {
+                        const colIndex = parseInt(headerForCell.dataset.colIndex);
+                        if (!columnVisibility[colIndex]) {
                             td.classList.add('hidden-column');
+                        } else {
+                            td.classList.remove('hidden-column');
                         }
                     }
                 });
             });
         }
+
+        // Инициализация порядка колонок
+        function initColumnOrder() {
+            if (!alignedData) return;
+            const totalCols = 1 + alignedData.aligned.length; // +1 для главного
+            if (columnOrder.length !== totalCols) {
+                columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            }
+        }
+        
+        // Перемещение колонки
+        function moveColumn(fromIndex, toIndex) {
+            if (fromIndex === 0 || toIndex === 0) {
+                alert('Главный список всегда должен быть первым');
+                return false;
+            }
+            
+            if (fromIndex === toIndex) return false;
+            
+            const item = columnOrder.splice(fromIndex, 1)[0];
+            columnOrder.splice(toIndex, 0, item);
+            
+            // Перестраиваем alignedData в соответствии с новым порядком
+            reorderAlignedData();
+            
+            return true;
+        }
+        
+        // Перестроение alignedData согласно columnOrder
+        function reorderAlignedData() {
+            if (!alignedData) return;
+            
+            // Собираем все тексты в правильном порядке
+            const newVerses = alignedData.verses.map(verse => {
+                const newTexts = columnOrder.map(idx => verse.texts[idx]);
+                return { num: verse.num, texts: newTexts };
+            });
+            
+            alignedData.verses = newVerses;
+            
+            // Обновляем список aligned (имена списков)
+            const allNames = [alignedData.main, ...alignedData.aligned];
+            const newAlignedNames = columnOrder.slice(1).map(idx => allNames[idx]);
+            alignedData.aligned = newAlignedNames;
+        }
+        
+        // Отрисовка таблицы с учётом порядка колонок
+        function renderOrderedTable() {
+            const container = document.getElementById('alignmentResult');
+            const startSheet = folioStart.value || '?';
+            const endSheet = folioEnd.value || '?';
+            
+            initColumnOrder();
+            
+            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
+            html += '<p style="margin-bottom: 16px; font-size: 13px; color: #8b7355;">↕️ Перетащите заголовок колонки, чтобы изменить порядок</p>';
+            
+            // Панель выбора колонок
+            html += renderColumnToggles();
+            
+            // Все имена списков
+            const allNames = [alignedData.main, ...alignedData.aligned];
+            
+            // Таблица
+            html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
+            
+            // Заголовки в порядке columnOrder
+            columnOrder.forEach((idx, pos) => {
+                const isMain = idx === 0;
+                const name = allNames[idx];
+                const draggableClass = isMain ? '' : 'draggable';
+                const mainBadge = isMain ? ' (главный)' : '';
+                html += `<th class="${draggableClass}" data-col-index="${idx}" data-col-pos="${pos}" draggable="${!isMain}">${name}${mainBadge}</th>`;
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            alignedData.verses.forEach(verse => {
+                html += '<tr><td><strong>' + verse.num + '</strong></td>';
+                columnOrder.forEach(idx => {
+                    const text = verse.texts[idx] || '—';
+                    html += '<td class="verse-text" data-col="' + idx + '">' + escapeHtml(text) + '</td>';
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            
+            // Кнопки
+            html += `
+                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
+                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
+                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
+                    <button class="btn btn-secondary" onclick="resetColumnOrder()">🔄 Сбросить порядок</button>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Навешиваем обработчики drag & drop
+            setupDragAndDrop();
+            
+            // Применяем видимость колонок
+            applyColumnVisibility();
+            
+            // Включаем редактирование
+            makeEditable();
+        }
+        
+        // Настройка Drag & Drop
+        function setupDragAndDrop() {
+            const headers = document.querySelectorAll('.alignment-table th.draggable');
+            
+            headers.forEach(th => {
+                th.addEventListener('dragstart', handleDragStart);
+                th.addEventListener('dragend', handleDragEnd);
+                th.addEventListener('dragover', handleDragOver);
+                th.addEventListener('dragenter', handleDragEnter);
+                th.addEventListener('dragleave', handleDragLeave);
+                th.addEventListener('drop', handleDrop);
+            });
+        }
+        
+        let dragSourceIndex = null;
+        
+        function handleDragStart(e) {
+            const th = e.target.closest('th');
+            if (!th) return;
+            
+            dragSourceIndex = parseInt(th.dataset.colPos);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragSourceIndex);
+            th.classList.add('dragging');
+        }
+        
+        function handleDragEnd(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('dragging');
+            
+            document.querySelectorAll('.alignment-table th').forEach(h => {
+                h.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleDragEnter(e) {
+            const th = e.target.closest('th');
+            if (th && th.classList.contains('draggable')) {
+                th.classList.add('drag-over');
+            }
+        }
+        
+        function handleDragLeave(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('drag-over');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            const targetTh = e.target.closest('th');
+            if (!targetTh) return;
+            
+            targetTh.classList.remove('drag-over');
+            
+            const targetIndex = parseInt(targetTh.dataset.colPos);
+            const sourceIndex = dragSourceIndex;
+            
+            if (sourceIndex === null || sourceIndex === targetIndex) return;
+            
+            // Получаем индексы в columnOrder
+            const sourceOrderIdx = columnOrder[sourceIndex];
+            const targetOrderIdx = columnOrder[targetIndex];
+            
+            // Нельзя перемещать главный список (индекс 0)
+            if (sourceOrderIdx === 0 || targetOrderIdx === 0) {
+                alert('Главный список всегда должен быть первым');
+                return;
+            }
+            
+            // Перемещаем
+            if (moveColumn(sourceIndex, targetIndex)) {
+                renderOrderedTable();
+            }
+        }
+        
+        window.resetColumnOrder = function() {
+            if (!alignedData) return;
+            const totalCols = 1 + alignedData.aligned.length;
+            columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            
+            // Восстанавливаем исходный порядок текстов
+            const allNames = [alignedData.main, ...alignedData.aligned];
+            const originalOrder = Array.from({ length: totalCols }, (_, i) => i);
+            
+            alignedData.verses = alignedData.verses.map(verse => {
+                const newTexts = originalOrder.map(idx => verse.texts[idx]);
+                return { num: verse.num, texts: newTexts };
+            });
+            
+            alignedData.aligned = allNames.slice(1);
+            
+            renderOrderedTable();
+            alert('Порядок сброшен');
+        };
         
         function renderAlignment() {
             const container = document.getElementById('alignmentResult');
@@ -688,11 +958,13 @@
         
         // Сессии
         window.saveSession = function() {
+            updateAlignedDataFromTable();
             const session = {
                 files: uploadedFiles.map(f => f.name),
                 aligned: alignedData,
                 sheets: { start: folioStart.value, end: folioEnd.value },
                 columnVisibility: columnVisibility,
+                columnOrder: columnOrder,
                 timestamp: new Date().toISOString()
             };
             localStorage.setItem('corpusSession', JSON.stringify(session));
@@ -705,10 +977,9 @@
                 const session = JSON.parse(saved);
                 folioStart.value = session.sheets.start;
                 folioEnd.value = session.sheets.end;
-                if (session.columnVisibility) {
-                    columnVisibility = session.columnVisibility;
-                }
-                alert('Загружена сессия от ' + session.timestamp + '\nЗагрузите те же файлы и нажмите "Выровнять"');
+                if (session.columnVisibility) columnVisibility = session.columnVisibility;
+                if (session.columnOrder) columnOrder = session.columnOrder;
+                alert('Загружена сессия от ' + session.timestamp);
             } else {
                 alert('Нет сохранённой сессии');
             }
