@@ -950,18 +950,9 @@
             
             initColumnOrder();
             
-            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
-            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
-            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
-            html += '<p style="margin-bottom: 16px; font-size: 13px; color: #8b7355;">↕️ Перетащите заголовок колонки, чтобы изменить порядок</p>';
-            
-            // Панель выбора колонок
-            html += renderColumnToggles();
-            
-            // Все имена списков
-            const allNames = [alignedData.main, ...alignedData.aligned];
+            // Анализируем разночтения
             analyzeAllDiffs();
-    
+            
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
             html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
@@ -972,6 +963,9 @@
             
             // Панель выбора колонок
             html += renderColumnToggles();
+            
+            // Все имена списков
+            const allNames = [alignedData.main, ...alignedData.aligned];
             
             // Таблица
             html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
@@ -1015,8 +1009,9 @@
             
             // Применяем видимость колонок
             applyColumnVisibility();
-
-            applyDiffHighlights(); 
+            
+            // Применяем подсветку разночтений
+            applyDiffHighlights();
             
             // Включаем редактирование
             makeEditable();
