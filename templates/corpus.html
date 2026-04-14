@@ -163,7 +163,7 @@
 
     <script>
         let uploadedFiles = [];
-        let manuscripts = [];
+        let manuscripts = [];  // [{ name, fullText, sheets }]
         let alignedData = null;
         
         const dropZone = document.getElementById('dropZone');
@@ -173,7 +173,10 @@
         const exportBtn = document.getElementById('exportBtn');
         const mainMsSelect = document.getElementById('mainMsSelect');
         const progressDiv = document.getElementById('progress');
+        const folioStart = document.getElementById('folioStart');
+        const folioEnd = document.getElementById('folioEnd');
         
+        // Drag & drop
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -192,9 +195,91 @@
         });
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
         
+        // Функция извлечения текста из XML
+        function extractTextFromXML(xmlString) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xmlString, 'application/xml');
+            
+            const words = [];
+            const sheets = [];
+            let currentSheet = null;
+            
+            // Проходим по всем элементам в порядке их следования
+            const allElements = doc.querySelectorAll('*');
+            
+            for (let el of allElements) {
+                // Отслеживаем листы
+                if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
+                    const n = el.getAttribute('n');
+                    if (n) {
+                        currentSheet = parseInt(n);
+                        if (!isNaN(currentSheet)) {
+                            sheets.push({ index: words.length, sheet: currentSheet });
+                        }
+                    }
+                }
+                
+                // Собираем текст из w и pc
+                if (el.tagName === 'w' || el.tagName === 'pc') {
+                    const t = el.textContent.trim();
+                    if (t && !['·', '⸱', '※', '∽', ':', '.', '⁘'].includes(t)) {
+                        words.push(t);
+                    }
+                }
+            }
+            
+            return {
+                fullText: words.join(' '),
+                words: words,
+                sheets: sheets
+            };
+        }
+        
+        // Фильтрация текста по листам
+        function filterTextBySheets(data, startSheet, endSheet) {
+            if (!startSheet || !endSheet) return data.fullText;
+            
+            const start = parseInt(startSheet);
+            const end = parseInt(endSheet);
+            
+            // Находим индексы слов для указанных листов
+            let startIdx = 0;
+            let endIdx = data.words.length;
+            
+            for (let sheet of data.sheets) {
+                if (sheet.sheet === start) {
+                    startIdx = sheet.index;
+                }
+                if (sheet.sheet === end + 1) {
+                    endIdx = sheet.index;
+                    break;
+                }
+            }
+            
+            return data.words.slice(startIdx, endIdx).join(' ');
+        }
+        
+        // Разбиение текста на стихи
+        function splitIntoVerses(text, verseCount = 22, startVerse = 11) {
+            const verses = {};
+            const allWords = text.split(/\s+/).filter(w => w.length > 0);
+            const chunkSize = Math.ceil(allWords.length / verseCount);
+            
+            for (let v = 0; v < verseCount; v++) {
+                const start = v * chunkSize;
+                const end = Math.min((v + 1) * chunkSize, allWords.length);
+                const verseText = allWords.slice(start, end).join(' ');
+                if (verseText) {
+                    verses[String(v + startVerse)] = verseText.substring(0, 400) + (verseText.length > 400 ? '...' : '');
+                }
+            }
+            
+            return verses;
+        }
+        
         async function handleFiles(files) {
             for (let file of files) {
-                if (file.name.endsWith('.xml')) {
+                if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
                     uploadedFiles.push(file);
                 }
             }
@@ -207,99 +292,24 @@
                 
                 manuscripts = [];
                 
-                // Получаем диапазон листов
-                const folioStart = parseInt(document.getElementById('folioStart').value) || 117;
-                const folioEnd = parseInt(document.getElementById('folioEnd').value) || 119;
-                
                 for (let i = 0; i < uploadedFiles.length; i++) {
                     const file = uploadedFiles[i];
                     progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
                     
                     try {
-                        const text = await file.text();
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(text, 'application/xml');
-                        
-                        // Определяем, является ли этот файл главным списком
-                        const mainIndex = parseInt(mainMsSelect.value);
-                        const isMain = (i === mainIndex);
-                        
-                        // Извлекаем текст с учётом листов
-                        const words = [];
-                        
-                        // Находим все элементы с текстом
-                        const allElements = doc.querySelectorAll('w, pc');
-                        
-                        let currentSheet = null;
-                        let includeText = !isMain; // Для неглавных списков берём всё
-                        
-                        // Проходим по всем элементам
-                        for (let el of allElements) {
-                            // Проверяем milestone (листы)
-                            if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
-                                const sheetNum = parseInt(el.getAttribute('n'));
-                                if (!isNaN(sheetNum)) {
-                                    currentSheet = sheetNum;
-                                    includeText = !isMain || (sheetNum >= folioStart && sheetNum <= folioEnd);
-                                }
-                            }
-                            
-                            // Проверяем pb (начало страницы)
-                            if (el.tagName === 'pb') {
-                                const pbMatch = el.getAttribute('n')?.match(/^(\d+)/);
-                                if (pbMatch) {
-                                    const pageNum = parseInt(pbMatch[1]);
-                                    if (!isNaN(pageNum)) {
-                                        includeText = !isMain || (pageNum >= folioStart && pageNum <= folioEnd);
-                                    }
-                                }
-                            }
-                            
-                            // Добавляем текст, если нужно
-                            if (includeText) {
-                                const t = el.textContent.trim();
-                                if (t) {
-                                    // Фильтруем служебные символы
-                                    if (el.tagName === 'pc') {
-                                        if (!['·', '⸱', '※', '∽', ':', '.'].includes(t)) {
-                                            words.push(t);
-                                        }
-                                    } else {
-                                        words.push(t);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        const fullText = words.join(' ');
-                        
-                        // Разбиваем на 22 стиха (11-32)
-                        const verses = {};
-                        const allWords = fullText.split(/\s+/);
-                        const chunkSize = Math.ceil(allWords.length / 22);
-                        
-                        for (let v = 0; v < 22; v++) {
-                            const start = v * chunkSize;
-                            const end = Math.min((v + 1) * chunkSize, allWords.length);
-                            const verseText = allWords.slice(start, end).join(' ');
-                            if (verseText) {
-                                verses[String(v + 11)] = verseText.substring(0, 300) + (verseText.length > 300 ? '...' : '');
-                            }
-                        }
+                        const xmlText = await file.text();
+                        const extracted = extractTextFromXML(xmlText);
                         
                         manuscripts.push({
                             name: file.name,
-                            verses: verses,
-                            sheetRange: isMain ? `${folioStart}-${folioEnd}` : 'все'
+                            data: extracted,
                         });
                         
                     } catch (err) {
                         console.error('Ошибка парсинга:', file.name, err);
-                        // Если ошибка — добавляем пустой объект
                         manuscripts.push({
                             name: file.name,
-                            verses: {},
-                            sheetRange: 'ошибка'
+                            data: { fullText: '[Ошибка парсинга]', words: [], sheets: [] }
                         });
                     }
                 }
@@ -347,6 +357,7 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
+        // Выравнивание (учитывает листы)
         alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
             
@@ -356,18 +367,29 @@
                 return;
             }
             
+            const startSheet = folioStart.value;
+            const endSheet = folioEnd.value;
+            
+            // Фильтруем текст главного списка по листам
             const mainMs = manuscripts[mainIndex];
+            const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
+            const mainVerses = splitIntoVerses(mainText);
+            
+            // Для остальных списков берём полный текст
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
+            const otherVerses = otherMss.map(ms => splitIntoVerses(ms.data.fullText));
             
             // Собираем все номера стихов
-            const verseNumbers = Object.keys(mainMs.verses).sort((a, b) => parseInt(a) - parseInt(b));
+            const allVerseNums = new Set(Object.keys(mainVerses));
+            otherVerses.forEach(v => Object.keys(v).forEach(k => allVerseNums.add(k)));
+            const verseNumbers = Array.from(allVerseNums).sort((a, b) => parseInt(a) - parseInt(b));
             
             alignedData = {
                 main: mainMs.name,
                 aligned: otherMss.map(m => m.name),
                 verses: verseNumbers.map(num => {
-                    const texts = [mainMs.verses[num] || '—'];
-                    otherMss.forEach(ms => texts.push(ms.verses[num] || '—'));
+                    const texts = [mainVerses[num] || '—'];
+                    otherVerses.forEach(v => texts.push(v[num] || '—'));
                     return { num, texts };
                 })
             };
@@ -378,9 +400,11 @@
         
         function renderAlignment() {
             const container = document.getElementById('alignmentResult');
-            const folioStart = document.getElementById('folioStart').value;
-            const folioEnd = document.getElementById('folioEnd').value;
+            const startSheet = folioStart.value || '?';
+            const endSheet = folioEnd.value || '?';
+            
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
+            html += `<p style="margin-bottom: 16px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += '<table class="alignment-table"><thead><tr><th>Стих</th><th>' + alignedData.main + '</th>';
             alignedData.aligned.forEach(name => html += '<th>' + name + '</th>');
             html += '</tr></thead><tbody>';
@@ -409,8 +433,14 @@
             return div.innerHTML;
         }
         
+        // Сессии
         window.saveSession = function() {
-            const session = { files: uploadedFiles.map(f => f.name), aligned: alignedData, timestamp: new Date().toISOString() };
+            const session = {
+                files: uploadedFiles.map(f => f.name),
+                aligned: alignedData,
+                sheets: { start: folioStart.value, end: folioEnd.value },
+                timestamp: new Date().toISOString()
+            };
             localStorage.setItem('corpusSession', JSON.stringify(session));
             alert('Сессия сохранена');
         };
@@ -419,12 +449,15 @@
             const saved = localStorage.getItem('corpusSession');
             if (saved) {
                 const session = JSON.parse(saved);
-                alert('Загружена сессия от ' + session.timestamp);
+                folioStart.value = session.sheets.start;
+                folioEnd.value = session.sheets.end;
+                alert('Загружена сессия от ' + session.timestamp + '\nЗагрузите те же файлы и нажмите "Выровнять"');
             } else {
                 alert('Нет сохранённой сессии');
             }
         };
         
+        // Экспорт XML
         exportBtn.addEventListener('click', () => {
             if (!alignedData) return;
             
