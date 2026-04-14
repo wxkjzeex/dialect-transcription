@@ -248,6 +248,74 @@
             opacity: 0.3;
             cursor: not-allowed;
         }
+                /* Типы разночтений */
+        .diff-graphic {
+            background: #fde2e4 !important;
+            border-bottom: 2px solid #c0392b;
+        }
+        .diff-phonetic {
+            background: #fff3cd !important;
+            border-bottom: 2px solid #d4a017;
+        }
+        .diff-morph {
+            background: #d4edda !important;
+            border-bottom: 2px solid #27ae60;
+        }
+        .diff-lexical {
+            background: #e2d5f1 !important;
+            border-bottom: 2px solid #8e44ad;
+        }
+        .diff-syntax {
+            background: #d1ecf1 !important;
+            border-bottom: 2px solid #2980b9;
+        }
+        
+        /* Панель фильтрации типов */
+        .diff-filters {
+            background: #f0eae2;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            border: 1px solid #d4c5b0;
+        }
+        .diff-filters-title {
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 12px;
+        }
+        .diff-filters-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .diff-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 12px;
+            background: #fffbf5;
+            border-radius: 20px;
+            border: 1px solid #d4c5b0;
+            transition: all 0.2s;
+        }
+        .diff-filter-item:hover {
+            background: #e8ddd0;
+        }
+        .diff-filter-item input {
+            cursor: pointer;
+        }
+        .diff-filter-item label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #4a3d2c;
+        }
+        .diff-filter-item .color-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            margin-right: 4px;
+        }
     </style>
 </head>
 <body>
@@ -293,6 +361,14 @@
     </div>
 
     <script>
+        // Настройки отображения типов разночтений
+        let diffTypesEnabled = {
+            graphic: true,
+            phonetic: true,
+            morph: true,
+            lexical: true,
+            syntax: true
+        };
         let uploadedFiles = [];
         let manuscripts = [];  // [{ name, fullText, sheets }]
         let columnVisibility = []; // true = показывать, false = скрыть
@@ -649,6 +725,222 @@
             const newAlignedNames = columnOrder.slice(1).map(idx => allNames[idx]);
             alignedData.aligned = newAlignedNames;
         }
+
+        // ==================== ОПРЕДЕЛЕНИЕ ТИПОВ РАЗНОЧТЕНИЙ ====================
+
+        // Графические пары (разные буквы для одного звука)
+        const GRAPHIC_PAIRS = [
+            ['ѹ', 'у'], ['ꙋ', 'у'], ['оу', 'у'],
+            ['ѡ', 'о'], ['ꙩ', 'о'],
+            ['ѣ', 'е'], ['ꙗ', 'я'], ['ѧ', 'я'],
+            ['і', 'и'], ['ї', 'и'], ['ѵ', 'и'],
+            ['ѳ', 'ф'], ['ѯ', 'кс'], ['ѱ', 'пс'],
+            ['ꙁ', 'з'], ['ѕ', 'з'],
+            ['ꙑ', 'ы'], ['ꙓ', 'е'],
+            ['҃', ''], ['҄', ''], ['҅', ''], ['҆', ''], // титла
+            ['·', ''], ['⸱', ''], ['※', ''], ['∽', '']
+        ];
+        
+        // Фонетические признаки (чередования)
+        const PHONETIC_PATTERNS = [
+            ['оро', 'ра'], ['оло', 'ла'], ['ере', 'ре'], ['ело', 'ле'], // полногласие
+            ['жд', 'ж'], ['щ', 'ч'], ['ц', 'ч'], ['з', 'ж'], ['с', 'ш'],
+            ['г', 'ж'], ['к', 'ч'], ['х', 'ш']
+        ];
+        
+        // Морфологические окончания
+        const MORPH_ENDINGS = [
+            ['ъ', ''], ['ь', ''],
+            ['ого', 'ова'], ['его', 'ева'],
+            ['ыя', 'ой'], ['ия', 'ей'],
+            ['ти', 'ть'], ['щи', 'чь'],
+            ['аго', 'ого'], ['яго', 'его'],
+            ['ѣ', 'е']
+        ];
+        
+        function normalizeText(text) {
+            if (!text) return '';
+            // Убираем титла, знаки препинания, приводим к нижнему регистру
+            return text.toLowerCase()
+                .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
+                .replace(/[҃҄҅҆]/g, '')
+                .trim();
+        }
+        
+        function detectDiffType(mainWord, otherWord) {
+            if (!mainWord || !otherWord) return null;
+            if (mainWord === otherWord) return null;
+            
+            const mainNorm = normalizeText(mainWord);
+            const otherNorm = normalizeText(otherWord);
+            
+            if (mainNorm === otherNorm) return null;
+            
+            // 1. Графические различия
+            let mainGraphic = mainNorm;
+            let otherGraphic = otherNorm;
+            for (let [old, new_] of GRAPHIC_PAIRS) {
+                const regex = new RegExp(old, 'g');
+                mainGraphic = mainGraphic.replace(regex, new_);
+                otherGraphic = otherGraphic.replace(regex, new_);
+            }
+            if (mainGraphic === otherGraphic) return 'graphic';
+            
+            // 2. Фонетические различия
+            for (let [pattern1, pattern2] of PHONETIC_PATTERNS) {
+                if ((mainNorm.includes(pattern1) && otherNorm.includes(pattern2)) ||
+                    (mainNorm.includes(pattern2) && otherNorm.includes(pattern1))) {
+                    // Проверяем, что остальной текст похож
+                    const mainWithout = mainNorm.replace(new RegExp(pattern1, 'g'), '').replace(new RegExp(pattern2, 'g'), '');
+                    const otherWithout = otherNorm.replace(new RegExp(pattern1, 'g'), '').replace(new RegExp(pattern2, 'g'), '');
+                    if (mainWithout === otherWithout) return 'phonetic';
+                }
+            }
+            
+            // 3. Морфологические различия (окончания)
+            for (let [ending1, ending2] of MORPH_ENDINGS) {
+                if (mainNorm.endsWith(ending1) && otherNorm.endsWith(ending2)) {
+                    const mainStem = mainNorm.slice(0, -ending1.length);
+                    const otherStem = otherNorm.slice(0, -ending2.length);
+                    if (mainStem === otherStem && Math.abs(ending1.length - ending2.length) <= 2) {
+                        return 'morph';
+                    }
+                }
+                if (mainNorm.endsWith(ending2) && otherNorm.endsWith(ending1)) {
+                    const mainStem = mainNorm.slice(0, -ending2.length);
+                    const otherStem = otherNorm.slice(0, -ending1.length);
+                    if (mainStem === otherStem && Math.abs(ending1.length - ending2.length) <= 2) {
+                        return 'morph';
+                    }
+                }
+            }
+            
+            // 4. Синтаксические (порядок слов)
+            const mainWords = mainNorm.split(/\s+/).sort();
+            const otherWords = otherNorm.split(/\s+/).sort();
+            if (mainWords.join(' ') === otherWords.join(' ') && mainNorm !== otherNorm) {
+                return 'syntax';
+            }
+            
+            // 5. Лексические (разные корни)
+            return 'lexical';
+        }
+        
+        function getDiffClass(type) {
+            if (!type) return '';
+            const classes = {
+                'graphic': 'diff-graphic',
+                'phonetic': 'diff-phonetic',
+                'morph': 'diff-morph',
+                'lexical': 'diff-lexical',
+                'syntax': 'diff-syntax'
+            };
+            return classes[type] || '';
+        }
+        
+        // Анализ разночтений для всей таблицы
+        function analyzeAllDiffs() {
+            if (!alignedData) return;
+            
+            alignedData.verses.forEach(verse => {
+                verse.diffTypes = verse.diffTypes || [];
+                const mainText = verse.texts[0];
+                
+                for (let i = 1; i < verse.texts.length; i++) {
+                    const otherText = verse.texts[i];
+                    const diffType = detectDiffType(mainText, otherText);
+                    verse.diffTypes[i] = diffType;
+                }
+            });
+        }
+
+        function renderDiffFilters() {
+            let html = '<div class="diff-filters">';
+            html += '<div class="diff-filters-title">🔬 Типы разночтений:</div>';
+            html += '<div class="diff-filters-list">';
+            
+            const filters = [
+                { id: 'graphic', name: 'Графические', color: '#c0392b' },
+                { id: 'phonetic', name: 'Фонетические', color: '#d4a017' },
+                { id: 'morph', name: 'Морфологические', color: '#27ae60' },
+                { id: 'lexical', name: 'Лексические', color: '#8e44ad' },
+                { id: 'syntax', name: 'Синтаксические', color: '#2980b9' }
+            ];
+            
+            filters.forEach(f => {
+                const checked = diffTypesEnabled[f.id] ? 'checked' : '';
+                html += `
+                    <div class="diff-filter-item" onclick="toggleDiffType('${f.id}')">
+                        <input type="checkbox" id="diff_${f.id}" ${checked}>
+                        <span class="color-badge" style="background: ${f.color};"></span>
+                        <label for="diff_${f.id}">${f.name}</label>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            html += '<div style="margin-top: 12px;">';
+            html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px; margin-right: 8px;">✓ Выбрать все</button>';
+            html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            return html;
+        }
+        
+        window.toggleDiffType = function(type) {
+            const checkbox = document.getElementById(`diff_${type}`);
+            if (checkbox) {
+                diffTypesEnabled[type] = checkbox.checked;
+                applyDiffHighlights();
+            }
+        };
+        
+        window.selectAllDiffTypes = function() {
+            Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = true);
+            document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = true);
+            applyDiffHighlights();
+        };
+        
+        window.deselectAllDiffTypes = function() {
+            Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
+            document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
+            applyDiffHighlights();
+        };
+        
+        function applyDiffHighlights() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            alignedData.verses.forEach((verse, rowIndex) => {
+                const row = rows[rowIndex];
+                if (!row) return;
+                
+                const cells = row.querySelectorAll('td.verse-text');
+                const mainText = verse.texts[0];
+                
+                // Первая ячейка — главный текст (не подсвечиваем)
+                
+                // Остальные ячейки
+                for (let i = 1; i < cells.length; i++) {
+                    const cell = cells[i];
+                    const otherText = verse.texts[i];
+                    
+                    // Убираем старые классы
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
+                    
+                    const diffType = detectDiffType(mainText, otherText);
+                    verse.diffTypes = verse.diffTypes || [];
+                    verse.diffTypes[i] = diffType;
+                    
+                    // Применяем класс, если тип включен
+                    if (diffType && diffTypesEnabled[diffType]) {
+                        cell.classList.add(getDiffClass(diffType));
+                    }
+                }
+            });
+        }
         
         // Отрисовка таблицы с учётом порядка колонок
         function renderOrderedTable() {
@@ -668,6 +960,18 @@
             
             // Все имена списков
             const allNames = [alignedData.main, ...alignedData.aligned];
+            analyzeAllDiffs();
+    
+            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
+            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">↕️ Перетащите заголовок колонки, чтобы изменить порядок</p>';
+            
+            // Панель фильтрации типов разночтений
+            html += renderDiffFilters();
+            
+            // Панель выбора колонок
+            html += renderColumnToggles();
             
             // Таблица
             html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
@@ -711,6 +1015,8 @@
             
             // Применяем видимость колонок
             applyColumnVisibility();
+
+            applyDiffHighlights(); 
             
             // Включаем редактирование
             makeEditable();
@@ -965,6 +1271,7 @@
                 sheets: { start: folioStart.value, end: folioEnd.value },
                 columnVisibility: columnVisibility,
                 columnOrder: columnOrder,
+                diffTypesEnabled: diffTypesEnabled,  // <-- ДОБАВИТЬ
                 timestamp: new Date().toISOString()
             };
             localStorage.setItem('corpusSession', JSON.stringify(session));
@@ -979,6 +1286,7 @@
                 folioEnd.value = session.sheets.end;
                 if (session.columnVisibility) columnVisibility = session.columnVisibility;
                 if (session.columnOrder) columnOrder = session.columnOrder;
+                if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;  // <-- ДОБАВИТЬ
                 alert('Загружена сессия от ' + session.timestamp);
             } else {
                 alert('Нет сохранённой сессии');
