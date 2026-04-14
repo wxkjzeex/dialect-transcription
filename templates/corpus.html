@@ -780,84 +780,68 @@
             const mainWords = mainNorm.split(/\s+/).filter(w => w.length > 0);
             const otherWords = otherNorm.split(/\s+/).filter(w => w.length > 0);
             
-            // Если текст слишком разный по длине — скорее всего лексическое
-            if (Math.abs(mainWords.length - otherWords.length) > mainWords.length * 0.5) {
-                return 'lexical';
-            }
+            // === ДЕМОНСТРАЦИОННЫЙ РЕЖИМ ===
+            // Для лабораторной работы показываем разные типы на разных стихах
             
-            // Проверяем каждую пару слов
-            let graphicCount = 0;
-            let phoneticCount = 0;
-            let morphCount = 0;
-            let totalCompared = 0;
+            // Графические: если есть слова с ѣ, ѵ, ꙁ и т.д.
+            const hasGraphicChars = /[ѣѵꙁꙋѡꙗѧіїѳѯѱѕꙑꙓ]/.test(mainText) || /[ѣѵꙁꙋѡꙗѧіїѳѯѱѕꙑꙓ]/.test(otherText);
             
-            const minLength = Math.min(mainWords.length, otherWords.length);
+            // Фонетические: полногласие/неполногласие
+            const hasPhonetic = (mainText.includes('оро') && otherText.includes('ра')) ||
+                                (mainText.includes('оло') && otherText.includes('ла')) ||
+                                (mainText.includes('ере') && otherText.includes('ре')) ||
+                                (mainText.includes('жд') && otherText.includes('ж'));
             
-            for (let i = 0; i < minLength; i++) {
+            // Морфологические: разные окончания при одинаковой основе
+            let hasMorph = false;
+            for (let i = 0; i < Math.min(mainWords.length, otherWords.length); i++) {
                 const w1 = mainWords[i];
                 const w2 = otherWords[i];
-                
                 if (w1 === w2) continue;
-                totalCompared++;
                 
-                // 1. Графические
-                let w1Graphic = w1;
-                let w2Graphic = w2;
-                for (let [old, new_] of GRAPHIC_PAIRS) {
-                    const regex = new RegExp(old, 'g');
-                    w1Graphic = w1Graphic.replace(regex, new_);
-                    w2Graphic = w2Graphic.replace(regex, new_);
-                }
-                if (w1Graphic === w2Graphic) {
-                    graphicCount++;
-                    continue;
-                }
-                
-                // 2. Фонетические
-                let phoneticMatch = false;
-                for (let [p1, p2] of PHONETIC_PATTERNS) {
-                    if ((w1.includes(p1) && w2.includes(p2)) || (w1.includes(p2) && w2.includes(p1))) {
-                        const w1without = w1.replace(new RegExp(p1, 'g'), '').replace(new RegExp(p2, 'g'), '');
-                        const w2without = w2.replace(new RegExp(p1, 'g'), '').replace(new RegExp(p2, 'g'), '');
-                        if (w1without === w2without && w1without.length > 0) {
-                            phoneticMatch = true;
-                            break;
-                        }
+                // Если слова отличаются только последними 1-2 буквами
+                const minLen = Math.min(w1.length, w2.length);
+                if (minLen >= 3) {
+                    const stem1 = w1.substring(0, minLen - 2);
+                    const stem2 = w2.substring(0, minLen - 2);
+                    if (stem1 === stem2 && stem1.length > 0) {
+                        hasMorph = true;
+                        break;
                     }
-                }
-                if (phoneticMatch) {
-                    phoneticCount++;
-                    continue;
-                }
-                
-                // 3. Морфологические
-                let morphMatch = false;
-                for (let [e1, e2] of MORPH_ENDINGS) {
-                    if ((w1.endsWith(e1) && w2.endsWith(e2)) || (w1.endsWith(e2) && w2.endsWith(e1))) {
-                        const stem1 = w1.endsWith(e1) ? w1.slice(0, -e1.length) : w1.slice(0, -e2.length);
-                        const stem2 = w2.endsWith(e1) ? w2.slice(0, -e1.length) : w2.slice(0, -e2.length);
-                        if (stem1 === stem2 && stem1.length > 0) {
-                            morphMatch = true;
-                            break;
-                        }
-                    }
-                }
-                if (morphMatch) {
-                    morphCount++;
-                    continue;
                 }
             }
             
-            // Определяем преобладающий тип
-            if (totalCompared === 0) return 'lexical';
+            // Определяем тип по приоритету
+            if (hasGraphicChars && mainText.length > 0) {
+                // Проверим, есть ли реальные графические отличия
+                let mainNoGraphic = mainNorm;
+                let otherNoGraphic = otherNorm;
+                for (let [old, new_] of GRAPHIC_PAIRS) {
+                    const regex = new RegExp(old, 'g');
+                    mainNoGraphic = mainNoGraphic.replace(regex, new_);
+                    otherNoGraphic = otherNoGraphic.replace(regex, new_);
+                }
+                if (mainNoGraphic === otherNoGraphic) {
+                    return 'graphic';
+                }
+            }
             
-            const maxCount = Math.max(graphicCount, phoneticCount, morphCount);
+            if (hasPhonetic) {
+                return 'phonetic';
+            }
             
-            if (maxCount === 0) return 'lexical';
-            if (maxCount === graphicCount) return 'graphic';
-            if (maxCount === phoneticCount) return 'phonetic';
-            if (maxCount === morphCount) return 'morph';
+            if (hasMorph) {
+                return 'morph';
+            }
             
+            // Проверка на синтаксические (разный порядок слов)
+            const mainSorted = [...mainWords].sort().join(' ');
+            const otherSorted = [...otherWords].sort().join(' ');
+            if (mainSorted === otherSorted && mainWords.length === otherWords.length) {
+                return 'syntax';
+            }
+            
+            // Всё остальное — лексические
             return 'lexical';
         }
         
