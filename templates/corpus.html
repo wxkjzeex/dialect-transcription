@@ -109,7 +109,29 @@
             font-family: 'BukyVede', 'Menaion Unicode', serif;
         }
         .alignment-table tr:hover td { background: #faf5ef; }
-        .verse-text { font-size: 15px; color: #2c241a; }
+                .verse-text {
+            font-size: 15px;
+            color: #2c241a;
+            cursor: text;
+            transition: background 0.2s;
+        }
+        .verse-text:hover {
+            background: #f0eae2;
+        }
+        .verse-text.editing {
+            padding: 0;
+        }
+        .verse-text textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 8px;
+            font-family: 'BukyVede', 'Menaion Unicode', serif;
+            font-size: 14px;
+            border: 2px solid #b89a7a;
+            border-radius: 6px;
+            background: #fffbf5;
+            resize: vertical;
+        }
         .progress {
             margin: 20px 0;
             padding: 12px;
@@ -424,14 +446,107 @@
                     <button class="btn btn-secondary" onclick="loadSession()" style="margin-left: 12px;">📂 Загрузить сессию</button>
                 </div>
             `;
+            html += `
+                <div style="margin-top: 24px; display: flex; gap: 12px;">
+                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
+                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
+                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('Изменения сохранены в текущей сессии')">✏️ Зафиксировать правки</button>
+                </div>
+            `;
             container.innerHTML = html;
-        }
+    
+                // Добавляем редактирование
+                makeEditable();
+            }
         
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
+        // ==================== РУЧНОЕ РЕДАКТИРОВАНИЕ ====================
+
+        function makeEditable() {
+            document.querySelectorAll('.verse-text').forEach(cell => {
+                // Убираем старые обработчики, чтобы не дублировались
+                cell.removeEventListener('dblclick', handleDoubleClick);
+                cell.addEventListener('dblclick', handleDoubleClick);
+            });
+        }
+        
+        function handleDoubleClick(e) {
+            const cell = e.currentTarget;
+            
+            // Если уже редактируется — не трогаем
+            if (cell.classList.contains('editing')) return;
+            
+            const originalText = cell.textContent;
+            const row = cell.closest('tr');
+            const cells = Array.from(row.querySelectorAll('.verse-text'));
+            const colIndex = cells.indexOf(cell);
+            
+            // Создаём textarea
+            const textarea = document.createElement('textarea');
+            textarea.value = originalText;
+            
+            // Сохраняем оригинальный текст
+            cell.classList.add('editing');
+            cell.textContent = '';
+            cell.appendChild(textarea);
+            textarea.focus();
+            
+            // Функция сохранения
+            const save = () => {
+                const newText = textarea.value.trim() || originalText;
+                cell.textContent = newText;
+                cell.classList.remove('editing');
+                
+                // Обновляем alignedData
+                if (alignedData) {
+                    const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+                    if (alignedData.verses[rowIndex]) {
+                        alignedData.verses[rowIndex].texts[colIndex] = newText;
+                    }
+                }
+                
+                // Подсвечиваем, что данные изменены
+                exportBtn.disabled = false;
+            };
+            
+            // Обработчики для textarea
+            textarea.addEventListener('blur', save);
+            
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    save();
+                }
+                if (e.key === 'Escape') {
+                    cell.textContent = originalText;
+                    cell.classList.remove('editing');
+                }
+            });
+        }
+        
+        // Функция для обновления alignedData после любого редактирования
+        function updateAlignedDataFromTable() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            alignedData.verses.forEach((verse, rowIndex) => {
+                if (rows[rowIndex]) {
+                    const cells = rows[rowIndex].querySelectorAll('.verse-text');
+                    verse.texts = Array.from(cells).map(cell => cell.textContent.trim());
+                }
+            });
+        }
+        
+        // Сброс выделения при клике вне таблицы
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.verse-text')) {
+                // Ничего не делаем, просто даём возможность завершить редактирование по blur
+            }
+        });
         
         // Сессии
         window.saveSession = function() {
@@ -459,6 +574,9 @@
         
         // Экспорт XML
         exportBtn.addEventListener('click', () => {
+            // Синхронизируем данные из таблицы перед экспортом
+            updateAlignedDataFromTable();
+            
             if (!alignedData) return;
             
             let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Притча о блудном сыне</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
