@@ -143,6 +143,12 @@
             <div id="fileList" class="file-list"></div>
             
             <div class="controls">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label style="font-size: 13px; color: #3e3225;">Листы главного списка:</label>
+                    <input type="number" id="folioStart" placeholder="От" min="1" max="500" value="117" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
+                    <span>–</span>
+                    <input type="number" id="folioEnd" placeholder="До" min="1" max="500" value="119" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
+                </div>
                 <button class="btn" id="alignBtn" disabled>🔗 Выровнять списки</button>
                 <button class="btn btn-secondary" id="exportBtn" disabled>💾 Выгрузить XML-TEI</button>
                 <select id="mainMsSelect" style="padding: 12px; border-radius: 8px; border: 1px solid #d4c5b0;" disabled>
@@ -194,13 +200,17 @@
             }
             renderFileList();
             
-            // Парсим файлы на клиенте
             if (uploadedFiles.length > 0) {
                 progressDiv.style.display = 'block';
                 progressDiv.className = 'progress';
                 progressDiv.innerHTML = '⏳ Парсинг XML-файлов...';
                 
                 manuscripts = [];
+                
+                // Получаем диапазон листов
+                const folioStart = parseInt(document.getElementById('folioStart').value) || 117;
+                const folioEnd = parseInt(document.getElementById('folioEnd').value) || 119;
+                
                 for (let i = 0; i < uploadedFiles.length; i++) {
                     const file = uploadedFiles[i];
                     progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
@@ -210,21 +220,56 @@
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(text, 'application/xml');
                         
-                        // Извлекаем весь текст из <w> и <pc>
-                        const words = [];
-                        const wElements = doc.querySelectorAll('w');
-                        const pcElements = doc.querySelectorAll('pc');
+                        // Определяем, является ли этот файл главным списком
+                        const mainIndex = parseInt(mainMsSelect.value);
+                        const isMain = (i === mainIndex);
                         
-                        wElements.forEach(w => {
-                            const t = w.textContent.trim();
-                            if (t) words.push(t);
-                        });
-                        pcElements.forEach(pc => {
-                            const t = pc.textContent.trim();
-                            if (t && t !== '·' && t !== '⸱' && t !== '※' && t !== '∽') {
-                                words.push(t);
+                        // Извлекаем текст с учётом листов
+                        const words = [];
+                        
+                        // Находим все элементы с текстом
+                        const allElements = doc.querySelectorAll('w, pc');
+                        
+                        let currentSheet = null;
+                        let includeText = !isMain; // Для неглавных списков берём всё
+                        
+                        // Проходим по всем элементам
+                        for (let el of allElements) {
+                            // Проверяем milestone (листы)
+                            if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
+                                const sheetNum = parseInt(el.getAttribute('n'));
+                                if (!isNaN(sheetNum)) {
+                                    currentSheet = sheetNum;
+                                    includeText = !isMain || (sheetNum >= folioStart && sheetNum <= folioEnd);
+                                }
                             }
-                        });
+                            
+                            // Проверяем pb (начало страницы)
+                            if (el.tagName === 'pb') {
+                                const pbMatch = el.getAttribute('n')?.match(/^(\d+)/);
+                                if (pbMatch) {
+                                    const pageNum = parseInt(pbMatch[1]);
+                                    if (!isNaN(pageNum)) {
+                                        includeText = !isMain || (pageNum >= folioStart && pageNum <= folioEnd);
+                                    }
+                                }
+                            }
+                            
+                            // Добавляем текст, если нужно
+                            if (includeText) {
+                                const t = el.textContent.trim();
+                                if (t) {
+                                    // Фильтруем служебные символы
+                                    if (el.tagName === 'pc') {
+                                        if (!['·', '⸱', '※', '∽', ':', '.'].includes(t)) {
+                                            words.push(t);
+                                        }
+                                    } else {
+                                        words.push(t);
+                                    }
+                                }
+                            }
+                        }
                         
                         const fullText = words.join(' ');
                         
@@ -244,11 +289,18 @@
                         
                         manuscripts.push({
                             name: file.name,
-                            verses: verses
+                            verses: verses,
+                            sheetRange: isMain ? `${folioStart}-${folioEnd}` : 'все'
                         });
                         
                     } catch (err) {
                         console.error('Ошибка парсинга:', file.name, err);
+                        // Если ошибка — добавляем пустой объект
+                        manuscripts.push({
+                            name: file.name,
+                            verses: {},
+                            sheetRange: 'ошибка'
+                        });
                     }
                 }
                 
@@ -326,6 +378,8 @@
         
         function renderAlignment() {
             const container = document.getElementById('alignmentResult');
+            const folioStart = document.getElementById('folioStart').value;
+            const folioEnd = document.getElementById('folioEnd').value;
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
             html += '<table class="alignment-table"><thead><tr><th>Стих</th><th>' + alignedData.main + '</th>';
             alignedData.aligned.forEach(name => html += '<th>' + name + '</th>');
