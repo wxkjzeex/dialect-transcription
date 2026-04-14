@@ -139,6 +139,60 @@
             border-radius: 8px;
             text-align: center;
         }
+                /* Панель выбора колонок */
+        .column-toggles {
+            background: #f8f2ea;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            border: 1px solid #d4c5b0;
+        }
+        .column-toggles-title {
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 12px;
+        }
+        .column-toggles-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .column-toggle-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 12px;
+            background: #fffbf5;
+            border-radius: 20px;
+            border: 1px solid #d4c5b0;
+            transition: all 0.2s;
+        }
+        .column-toggle-item:hover {
+            background: #e8ddd0;
+        }
+        .column-toggle-item input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+        .column-toggle-item label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #4a3d2c;
+        }
+        .column-toggle-item.disabled {
+            opacity: 0.5;
+            background: #e0d3c4;
+        }
+        /* Скрытые колонки */
+        .hidden-column {
+            display: none !important;
+        }
+        .alignment-table .hidden-column {
+            display: none;
+        }
+        
     </style>
 </head>
 <body>
@@ -186,6 +240,7 @@
     <script>
         let uploadedFiles = [];
         let manuscripts = [];  // [{ name, fullText, sheets }]
+        let columnVisibility = []; // true = показывать, false = скрыть
         let alignedData = null;
         
         const dropZone = document.getElementById('dropZone');
@@ -419,6 +474,78 @@
             renderAlignment();
             exportBtn.disabled = false;
         });
+
+        function renderColumnToggles() {
+            if (!alignedData) return '';
+            
+            const allColumns = [alignedData.main, ...alignedData.aligned];
+            
+            // Инициализируем видимость (все показываем)
+            if (columnVisibility.length !== allColumns.length) {
+                columnVisibility = allColumns.map(() => true);
+            }
+            
+            let html = '<div class="column-toggles">';
+            html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
+            html += '<div class="column-toggles-list">';
+            
+            allColumns.forEach((name, index) => {
+                const checked = columnVisibility[index] ? 'checked' : '';
+                const isMain = index === 0;
+                html += `
+                    <div class="column-toggle-item" onclick="toggleColumn(${index})">
+                        <input type="checkbox" id="colToggle${index}" ${checked} ${isMain ? 'disabled' : ''}>
+                        <label for="colToggle${index}" style="${isMain ? 'font-weight:600;' : ''}">${name}</label>
+                        ${isMain ? '<span style="font-size:11px; color:#8b7355;">(главный)</span>' : ''}
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        window.toggleColumn = function(index) {
+            const checkbox = document.getElementById(`colToggle${index}`);
+            if (checkbox) {
+                columnVisibility[index] = checkbox.checked;
+                applyColumnVisibility();
+            }
+        };
+        
+        function applyColumnVisibility() {
+            if (!alignedData) return;
+            
+            const table = document.querySelector('.alignment-table');
+            if (!table) return;
+            
+            // Скрываем/показываем заголовки
+            const headers = table.querySelectorAll('thead th');
+            headers.forEach((th, idx) => {
+                if (idx > 0 && idx <= columnVisibility.length) {
+                    if (columnVisibility[idx - 1]) {
+                        th.classList.remove('hidden-column');
+                    } else {
+                        th.classList.add('hidden-column');
+                    }
+                }
+            });
+            
+            // Скрываем/показываем ячейки
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                cells.forEach((td, idx) => {
+                    if (idx > 0 && idx <= columnVisibility.length) {
+                        if (columnVisibility[idx - 1]) {
+                            td.classList.remove('hidden-column');
+                        } else {
+                            td.classList.add('hidden-column');
+                        }
+                    }
+                });
+            });
+        }
         
         function renderAlignment() {
             const container = document.getElementById('alignmentResult');
@@ -426,21 +553,33 @@
             const endSheet = folioEnd.value || '?';
             
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
-            html += `<p style="margin-bottom: 16px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += '<p style="margin-bottom: 16px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
-            html += '<table class="alignment-table"><thead><tr><th>Стих</th><th>' + alignedData.main + '</th>';
-            alignedData.aligned.forEach(name => html += '<th>' + name + '</th>');
+            
+            // Панель выбора колонок
+            html += renderColumnToggles();
+            
+            // Таблица
+            html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
+            
+            // Заголовки с data-атрибутами для скрытия
+            html += '<th class="col-header" data-col="0">' + alignedData.main + ' (главный)</th>';
+            alignedData.aligned.forEach((name, idx) => {
+                html += '<th class="col-header" data-col="' + (idx + 1) + '">' + name + '</th>';
+            });
             html += '</tr></thead><tbody>';
             
             alignedData.verses.forEach(verse => {
                 html += '<tr><td><strong>' + verse.num + '</strong></td>';
-                verse.texts.forEach(text => {
-                    html += '<td class="verse-text">' + escapeHtml(text) + '</td>';
+                verse.texts.forEach((text, idx) => {
+                    html += '<td class="verse-text" data-col="' + idx + '">' + escapeHtml(text) + '</td>';
                 });
                 html += '</tr>';
             });
             
             html += '</tbody></table>';
+            
+            // Кнопки
             html += `
                 <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
                     <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
@@ -448,7 +587,11 @@
                     <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
                 </div>
             `;
+            
             container.innerHTML = html;
+            
+            // Применяем видимость колонок
+            applyColumnVisibility();
             
             // Включаем редактирование
             makeEditable();
@@ -549,6 +692,7 @@
                 files: uploadedFiles.map(f => f.name),
                 aligned: alignedData,
                 sheets: { start: folioStart.value, end: folioEnd.value },
+                columnVisibility: columnVisibility,
                 timestamp: new Date().toISOString()
             };
             localStorage.setItem('corpusSession', JSON.stringify(session));
@@ -561,6 +705,9 @@
                 const session = JSON.parse(saved);
                 folioStart.value = session.sheets.start;
                 folioEnd.value = session.sheets.end;
+                if (session.columnVisibility) {
+                    columnVisibility = session.columnVisibility;
+                }
                 alert('Загружена сессия от ' + session.timestamp + '\nЗагрузите те же файлы и нажмите "Выровнять"');
             } else {
                 alert('Нет сохранённой сессии');
