@@ -359,6 +359,113 @@
             font-weight: 400;
             margin-left: 8px;
         }
+
+                /* Форма добавления пункта */
+        .add-settlement-form {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 15px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #5d4e37;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border 0.2s;
+            background: white;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #27ae60;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .add-settlement-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #27ae60, #219a52);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 8px;
+        }
+        
+        .add-settlement-btn:hover {
+            background: linear-gradient(135deg, #219a52, #1e8449);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(39, 174, 96, 0.2);
+        }
+        
+        .add-settlement-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .geocode-status {
+            font-size: 11px;
+            margin-top: 4px;
+            color: #7f8c8d;
+        }
+        
+        .geocode-status.success {
+            color: #27ae60;
+        }
+        
+        .geocode-status.error {
+            color: #e74c3c;
+        }
+        
+        .toggle-form-btn {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            border: 2px dashed #bdc3c7;
+            border-radius: 8px;
+            color: #7f8c8d;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+        
+        .toggle-form-btn:hover {
+            border-color: #27ae60;
+            color: #27ae60;
+        }
     </style>
 </head>
 <body>
@@ -505,6 +612,68 @@
                         <button class="save-comments-btn" onclick="saveComments()">💾 Сохранить</button>
                         <span id="saveStatus" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
                     </div>
+                </div>
+            </div>
+
+                        <!-- Добавление нового пункта -->
+            <div class="section">
+                <div class="section-title">➕ Добавить населенный пункт</div>
+                <button class="toggle-form-btn" id="toggleFormBtn">▼ Показать форму добавления</button>
+                
+                <div id="addSettlementForm" class="add-settlement-form" style="display: none;">
+                    <div class="form-group">
+                        <label>📍 Название населенного пункта</label>
+                        <input type="text" id="newSettlementName" placeholder="например: с. Шаркан">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>🌍 Регион</label>
+                            <select id="newSettlementRegion">
+                                <option value="">Выберите регион</option>
+                                <option value="Удмуртия">Удмуртия</option>
+                                <option value="Кировская обл.">Кировская область</option>
+                                <option value="Татарстан">Татарстан</option>
+                                <option value="Пермский край">Пермский край</option>
+                                <option value="Башкортостан">Башкортостан</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🏘️ Район</label>
+                            <select id="newSettlementDistrict">
+                                <option value="">Выберите район</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>📋 Вопрос ЛАРНГ (код)</label>
+                        <input type="text" id="newQuestionCode" placeholder="например: L 205">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>❓ Текст вопроса</label>
+                        <input type="text" id="newQuestionText" placeholder="например: Глагол 'пахать'">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>📝 Основная лексема</label>
+                            <input type="text" id="newLingUnit1" placeholder="например: орать">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>📝 Вариант лексемы</label>
+                            <input type="text" id="newLingUnit2" placeholder="например: пахать (необязательно)">
+                        </div>
+                    </div>
+                    
+                    <div class="geocode-status" id="geocodeStatus"></div>
+                    
+                    <button class="add-settlement-btn" id="addSettlementBtn" onclick="addNewSettlement()">
+                        ➕ Добавить пункт и данные
+                    </button>
                 </div>
             </div>
 
@@ -1136,6 +1305,245 @@
 
             renderMarkers();
         };
+
+                // ==================== ДОБАВЛЕНИЕ НОВОГО ПУНКТА ====================
+        
+        // Списки районов по регионам
+        const districtsByRegion = {
+            'Удмуртия': [
+                'Алнашский', 'Балезинский', 'Вавожский', 'Воткинский', 'Глазовский',
+                'Граховский', 'Дебёсский', 'Завьяловский', 'Игринский', 'Камбарский',
+                'Каракулинский', 'Кезский', 'Кизнерский', 'Киясовский', 'Красногорский',
+                'Малопургинский', 'Можгинский', 'Сарапульский', 'Селтинский', 'Сюмсинский',
+                'Увинский', 'Шарканский', 'Юкаменский', 'Якшур-Бодьинский', 'Ярский'
+            ],
+            'Кировская обл.': [
+                'Фалёнский', 'Унинский', 'Богородский', 'Зуевский', 'Кильмезский',
+                'Вятскополянский', 'Малмыжский', 'Уржумский', 'Немский', 'Нолинский'
+            ],
+            'Татарстан': [
+                'Агрызский', 'Кукморский', 'Менделеевский', 'Елабужский', 'Мамадышский',
+                'Балтасинский', 'Сабинский', 'Тюлячинский', 'Рыбно-Слободский'
+            ],
+            'Пермский край': [
+                'Чайковский', 'Еловский', 'Осинский', 'Бардымский', 'Куединский'
+            ],
+            'Башкортостан': [
+                'Янаульский', 'Калтасинский', 'Бураевский', 'Татышлинский'
+            ]
+        };
+        
+        // Обработчик переключения формы
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('toggleFormBtn');
+            const form = document.getElementById('addSettlementForm');
+            
+            if (toggleBtn && form) {
+                toggleBtn.addEventListener('click', function() {
+                    if (form.style.display === 'none') {
+                        form.style.display = 'block';
+                        toggleBtn.textContent = '▲ Скрыть форму добавления';
+                    } else {
+                        form.style.display = 'none';
+                        toggleBtn.textContent = '▼ Показать форму добавления';
+                    }
+                });
+            }
+            
+            // Обновление списка районов при выборе региона
+            const regionSelect = document.getElementById('newSettlementRegion');
+            const districtSelect = document.getElementById('newSettlementDistrict');
+            
+            if (regionSelect && districtSelect) {
+                regionSelect.addEventListener('change', function() {
+                    const region = this.value;
+                    districtSelect.innerHTML = '<option value="">Выберите район</option>';
+                    
+                    if (region && districtsByRegion[region]) {
+                        districtsByRegion[region].forEach(district => {
+                            const option = document.createElement('option');
+                            option.value = district;
+                            option.textContent = district;
+                            districtSelect.appendChild(option);
+                        });
+                    }
+                });
+            }
+        });
+        
+        // Геокодирование адреса
+        async function geocodeSettlement(name, region, district) {
+            const query = `${name}, ${district} район, ${region}, Россия`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'DialectAtlas/1.0'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.length > 0) {
+                    return {
+                        lat: parseFloat(data[0].lat),
+                        lng: parseFloat(data[0].lon),
+                        displayName: data[0].display_name
+                    };
+                }
+                return null;
+            } catch (error) {
+                console.error('Ошибка геокодирования:', error);
+                return null;
+            }
+        }
+        
+        // Добавление нового населенного пункта
+        window.addNewSettlement = async function() {
+            const name = document.getElementById('newSettlementName').value.trim();
+            const region = document.getElementById('newSettlementRegion').value;
+            const district = document.getElementById('newSettlementDistrict').value;
+            const questionCode = document.getElementById('newQuestionCode').value.trim();
+            const questionText = document.getElementById('newQuestionText').value.trim();
+            const lingUnit1 = document.getElementById('newLingUnit1').value.trim();
+            const lingUnit2 = document.getElementById('newLingUnit2').value.trim();
+            
+            // Валидация
+            if (!name || !region || !district) {
+                alert('Заполните название, регион и район');
+                return;
+            }
+            
+            if (!questionCode || !questionText || !lingUnit1) {
+                alert('Заполните код вопроса, текст вопроса и основную лексему');
+                return;
+            }
+            
+            const statusEl = document.getElementById('geocodeStatus');
+            const btn = document.getElementById('addSettlementBtn');
+            
+            btn.disabled = true;
+            statusEl.textContent = '🔍 Поиск координат...';
+            statusEl.className = 'geocode-status';
+            
+            // Геокодирование
+            const coords = await geocodeSettlement(name, region, district);
+            
+            if (!coords) {
+                statusEl.textContent = '❌ Не удалось найти координаты. Проверьте название.';
+                statusEl.className = 'geocode-status error';
+                btn.disabled = false;
+                return;
+            }
+            
+            statusEl.textContent = `✅ Координаты найдены: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+            statusEl.className = 'geocode-status success';
+            
+            // Создаем displayName
+            const displayName = name.includes('.') || name.includes('г.') || name.includes('с.') || name.includes('д.') || name.includes('пгт') 
+                ? name 
+                : `с. ${name}`;
+            
+            // Добавляем в массив settlements
+            const newSettlement = {
+                name: name,
+                displayName: displayName,
+                district: district,
+                region: region,
+                lat: coords.lat,
+                lng: coords.lng
+            };
+            
+            settlements.push(newSettlement);
+            
+            // Добавляем запись в dialectData
+            const newRecord = {
+                region: region,
+                district: district,
+                settlement: name,
+                question_code: questionCode,
+                question_text: questionText,
+                ling_unit_1: lingUnit1,
+                ling_unit_2: lingUnit2 || ''
+            };
+            
+            dialectData.push(newRecord);
+            
+            // Отправляем в Google Таблицу
+            statusEl.textContent = '📤 Отправка в Google Таблицу...';
+            
+            const success = await sendToGoogleSheet(newRecord);
+            
+            if (success) {
+                statusEl.textContent = '✅ Пункт успешно добавлен и сохранен в таблице!';
+                statusEl.className = 'geocode-status success';
+                
+                // Очищаем форму
+                document.getElementById('newSettlementName').value = '';
+                document.getElementById('newSettlementRegion').value = '';
+                document.getElementById('newSettlementDistrict').innerHTML = '<option value="">Выберите район</option>';
+                document.getElementById('newQuestionCode').value = '';
+                document.getElementById('newQuestionText').value = '';
+                document.getElementById('newLingUnit1').value = '';
+                document.getElementById('newLingUnit2').value = '';
+                
+                // Обновляем фильтры и карту
+                initDistrictFilters();
+                renderMarkers();
+                
+                // Сворачиваем форму
+                setTimeout(() => {
+                    document.getElementById('addSettlementForm').style.display = 'none';
+                    document.getElementById('toggleFormBtn').textContent = '▼ Показать форму добавления';
+                }, 1500);
+            } else {
+                statusEl.textContent = '⚠️ Пункт добавлен локально, но не сохранен в таблице (требуется настройка Apps Script)';
+                statusEl.className = 'geocode-status error';
+                
+                // Все равно обновляем карту
+                initDistrictFilters();
+                renderMarkers();
+            }
+            
+            btn.disabled = false;
+        };
+        
+        // Отправка данных в Google Таблицу через Google Apps Script
+        async function sendToGoogleSheet(record) {
+            // URL вашего Google Apps Script Web App
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYOUR_SCRIPT_ID_HERE/exec';
+            
+            // Если скрипт не настроен, возвращаем false
+            if (SCRIPT_URL.includes('YOUR_SCRIPT_ID')) {
+                console.warn('Google Apps Script не настроен. Данные сохранены только локально.');
+                return false;
+            }
+            
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // для Google Apps Script
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        region: record.region,
+                        district: record.district,
+                        settlement: record.settlement,
+                        question_code: record.question_code,
+                        question_text: record.question_text,
+                        ling_unit_1: record.ling_unit_1,
+                        ling_unit_2: record.ling_unit_2,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                return true;
+            } catch (error) {
+                console.error('Ошибка отправки в Google Sheets:', error);
+                return false;
+            }
+        }
 
         // ==================== ЗАПУСК ====================
         window.onload = function () {
