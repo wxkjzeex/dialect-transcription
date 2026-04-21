@@ -468,24 +468,6 @@
             return data.words.slice(startIdx, endIdx).join(' ');
         }
         
-        // Разбиение текста на стихи
-        function splitIntoVerses(text, verseCount = 22, startVerse = 11) {
-            const verses = {};
-            const allWords = text.split(/\s+/).filter(w => w.length > 0);
-            const chunkSize = Math.ceil(allWords.length / verseCount);
-            
-            for (let v = 0; v < verseCount; v++) {
-                const start = v * chunkSize;
-                const end = Math.min((v + 1) * chunkSize, allWords.length);
-                const verseText = allWords.slice(start, end).join(' ');
-                if (verseText) {
-                    verses[String(v + startVerse)] = verseText.substring(0, 400) + (verseText.length > 400 ? '...' : '');
-                }
-            }
-            
-            return verses;
-        }
-        
         async function handleFiles(files) {
             for (let file of files) {
                 if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
@@ -566,7 +548,176 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-        // Выравнивание (учитывает листы)
+        // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
+        
+        // Алгоритм выравнивания Левенштейна (упрощенный Needleman-Wunsch)
+        function alignWords(mainWords, otherWords) {
+            const m = mainWords.length;
+            const n = otherWords.length;
+            
+            // Создаем матрицу DP
+            const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+            
+            for (let i = 0; i <= m; i++) dp[i][0] = i;
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    const cost = mainWords[i-1] === otherWords[j-1] ? 0 : 1;
+                    dp[i][j] = Math.min(
+                        dp[i-1][j] + 1,      // удаление
+                        dp[i][j-1] + 1,      // вставка
+                        dp[i-1][j-1] + cost  // замена/совпадение
+                    );
+                }
+            }
+            
+            // Обратный ход для получения выравнивания
+            const alignment = [];
+            let i = m, j = n;
+            
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && dp[i][j] === dp[i-1][j-1] + (mainWords[i-1] === otherWords[j-1] ? 0 : 1)) {
+                    alignment.unshift({
+                        main: mainWords[i-1],
+                        other: otherWords[j-1],
+                        type: mainWords[i-1] === otherWords[j-1] ? 'match' : 'substitution'
+                    });
+                    i--; j--;
+                } else if (i > 0 && dp[i][j] === dp[i-1][j] + 1) {
+                    alignment.unshift({
+                        main: mainWords[i-1],
+                        other: '—',
+                        type: 'deletion'
+                    });
+                    i--;
+                } else {
+                    alignment.unshift({
+                        main: '—',
+                        other: otherWords[j-1],
+                        type: 'insertion'
+                    });
+                    j--;
+                }
+            }
+            
+            return alignment;
+        }
+
+        // Определение типа разночтения для пары слов
+        function detectWordDiffType(mainWord, otherWord) {
+            if (!mainWord || !otherWord) return null;
+            if (mainWord === otherWord) return null;
+            if (mainWord === '—' || otherWord === '—') return 'insertion';
+            
+            // Нормализация
+            const normMain = normalizeText(mainWord);
+            const normOther = normalizeText(otherWord);
+            
+            if (normMain === normOther) return null;
+            
+            // Графические
+            let mainNoGraphic = normMain;
+            let otherNoGraphic = normOther;
+            for (let [old, new_] of GRAPHIC_PAIRS) {
+                const regex = new RegExp(old, 'g');
+                mainNoGraphic = mainNoGraphic.replace(regex, new_);
+                otherNoGraphic = otherNoGraphic.replace(regex, new_);
+            }
+            if (mainNoGraphic === otherNoGraphic) {
+                return 'graphic';
+            }
+            
+            // Фонетические
+            for (let [p1, p2] of PHONETIC_PATTERNS) {
+                if ((normMain.includes(p1) && normOther.includes(p2)) || 
+                    (normMain.includes(p2) && normOther.includes(p1))) {
+                    return 'phonetic';
+                }
+            }
+            
+            // Морфологические: разница в окончаниях при общей основе > 3 букв
+            let commonPrefix = '';
+            for (let i = 0; i < Math.min(normMain.length, normOther.length); i++) {
+                if (normMain[i] === normOther[i]) {
+                    commonPrefix += normMain[i];
+                } else {
+                    break;
+                }
+            }
+            
+            if (commonPrefix.length >= 3) {
+                const suffix1 = normMain.slice(commonPrefix.length);
+                const suffix2 = normOther.slice(commonPrefix.length);
+                if (suffix1.length <= 3 && suffix2.length <= 3) {
+                    return 'morph';
+                }
+            }
+            
+            // Лексические: все остальное
+            return 'lexical';
+        }
+
+        // Статистика разночтений
+        function calculateDiffStats() {
+            const stats = {
+                'graphic': 0,
+                'phonetic': 0,
+                'morph': 0,
+                'lexical': 0,
+                'match': 0
+            };
+            
+            if (!alignedData) return stats;
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const mainWord = alignedData.mainWords[i];
+                
+                alignedData.alignments.forEach(alignment => {
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    if (diffType && stats[diffType] !== undefined) {
+                        stats[diffType]++;
+                    } else if (!diffType && mainWord === otherWord) {
+                        stats.match++;
+                    }
+                });
+            }
+            
+            return stats;
+        }
+
+        function getColorForType(type) {
+            const colors = {
+                'graphic': '#c0392b',
+                'phonetic': '#d4a017',
+                'morph': '#27ae60',
+                'lexical': '#8e44ad',
+                'syntax': '#2980b9',
+                'match': '#95a5a6',
+                'insertion': '#e74c3c'
+            };
+            return colors[type] || '#95a5a6';
+        }
+
+        function getShortLabel(type) {
+            const labels = {
+                'graphic': 'ГР',
+                'phonetic': 'ФН',
+                'morph': 'МФ',
+                'lexical': 'ЛК',
+                'syntax': 'СН',
+                'insertion': 'ВСТ'
+            };
+            return labels[type] || type;
+        }
+        
+        // ==================== НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ====================
+        
         alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
             
@@ -579,33 +730,215 @@
             const startSheet = folioStart.value;
             const endSheet = folioEnd.value;
             
-            // Фильтруем текст главного списка по листам
+            progressDiv.style.display = 'block';
+            progressDiv.innerHTML = '⏳ Подготовка текста...';
+            
+            // Получаем текст главного списка с учетом листов
             const mainMs = manuscripts[mainIndex];
             const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
-            const mainVerses = splitIntoVerses(mainText);
+            const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
             
-            // Для остальных списков берём полный текст
+            // Остальные списки
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
-            const otherVerses = otherMss.map(ms => splitIntoVerses(ms.data.fullText));
             
-            // Собираем все номера стихов
-            const allVerseNums = new Set(Object.keys(mainVerses));
-            otherVerses.forEach(v => Object.keys(v).forEach(k => allVerseNums.add(k)));
-            const verseNumbers = Array.from(allVerseNums).sort((a, b) => parseInt(a) - parseInt(b));
+            // Выравниваем каждый список с главным
+            const alignedWords = [];
             
+            otherMss.forEach((ms, idx) => {
+                progressDiv.innerHTML = `⏳ Выравнивание ${idx+1}/${otherMss.length}: ${ms.name}...`;
+                
+                const otherText = ms.data.fullText;
+                const otherWords = otherText.split(/\s+/).filter(w => w.length > 0);
+                
+                const alignment = alignWords(mainWords, otherWords);
+                alignedWords.push(alignment);
+            });
+            
+            // Формируем данные для таблицы
             alignedData = {
                 main: mainMs.name,
                 aligned: otherMss.map(m => m.name),
-                verses: verseNumbers.map(num => {
-                    const texts = [mainVerses[num] || '—'];
-                    otherVerses.forEach(v => texts.push(v[num] || '—'));
-                    return { num, texts };
-                })
+                mainWords: mainWords,
+                alignments: alignedWords
             };
             
-            renderOrderedTable();
+            progressDiv.style.display = 'none';
+            renderWordAlignmentTable();
             exportBtn.disabled = false;
         });
+
+        // ==================== ОТРИСОВКА ТАБЛИЦЫ ПОСЛОВНОГО ВЫРАВНИВАНИЯ ====================
+        
+        function renderWordAlignmentTable() {
+            const container = document.getElementById('alignmentResult');
+            const startSheet = folioStart.value || '?';
+            const endSheet = folioEnd.value || '?';
+            
+            if (!alignedData) return;
+            
+            initColumnOrder();
+            
+            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Пословное выравнивание</h3>';
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Слов в главном списке: ${alignedData.mainWords.length}</p>`;
+            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
+            
+            // Статистика
+            const stats = calculateDiffStats();
+            html += '<div style="margin: 16px 0; padding: 16px; background: #f0eae2; border-radius: 12px;">';
+            html += '<h4 style="margin-bottom: 12px;">📊 Статистика разночтений:</h4>';
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 16px;">';
+            
+            const statLabels = {
+                'graphic': 'Графические',
+                'phonetic': 'Фонетические',
+                'morph': 'Морфологические',
+                'lexical': 'Лексические',
+                'match': 'Совпадения'
+            };
+            
+            Object.entries(stats).forEach(([type, count]) => {
+                if (statLabels[type]) {
+                    html += `<div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="background: ${getColorForType(type)}; width: 16px; height: 16px; border-radius: 4px;"></span>
+                        <span>${statLabels[type]}: <strong>${count}</strong></span>
+                    </div>`;
+                }
+            });
+            
+            html += '</div></div>';
+            
+            // Панель фильтрации типов разночтений
+            html += renderDiffFilters();
+            
+            // Панель выбора колонок
+            html += renderColumnToggles();
+            
+            // Таблица
+            html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
+            html += '<table class="alignment-table" style="min-width: 100%;">';
+            
+            // Заголовки
+            html += '<thead><tr>';
+            html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;">№</th>';
+            
+            // Все имена списков
+            const allNames = [alignedData.main, ...alignedData.aligned];
+            
+            // Заголовки в порядке columnOrder
+            columnOrder.forEach((idx, pos) => {
+                const isMain = idx === 0;
+                const name = allNames[idx];
+                const draggableClass = isMain ? '' : 'draggable';
+                const mainBadge = isMain ? ' (главный)' : '';
+                html += `<th class="${draggableClass}" style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;" data-col-index="${idx}" data-col-pos="${pos}" draggable="${!isMain}">${name}${mainBadge}</th>`;
+                if (!isMain) {
+                    html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10; width: 80px;">Тип</th>';
+                }
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            // Строки таблицы
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                html += '<tr>';
+                html += '<td><strong>' + (i + 1) + '</strong></td>';
+                
+                columnOrder.forEach(idx => {
+                    if (idx === 0) {
+                        // Главный список
+                        html += '<td class="verse-text" data-col="0" data-row="' + i + '">' + escapeHtml(alignedData.mainWords[i]) + '</td>';
+                    } else {
+                        // Остальные списки
+                        const listIdx = idx - 1;
+                        const alignment = alignedData.alignments[listIdx];
+                        const pair = alignment[i] || { main: alignedData.mainWords[i], other: '—', type: 'missing' };
+                        const otherWord = pair.other || '—';
+                        const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
+                        const diffClass = diffType ? getDiffClass(diffType) : '';
+                        
+                        html += `<td class="verse-text ${diffClass}" data-col="${idx}" data-row="${i}">${escapeHtml(otherWord)}</td>`;
+                        html += '<td style="font-size: 12px; color: #6b5a4a;">';
+                        if (diffType) {
+                            html += `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
+                        } else {
+                            html += '✓';
+                        }
+                        html += '</td>';
+                    }
+                });
+                
+                html += '</tr>';
+            }
+            
+            html += '</tbody></table></div>';
+            
+            // Кнопки
+            html += `
+                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
+                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
+                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
+                    <button class="btn btn-secondary" onclick="resetColumnOrder()">🔄 Сбросить порядок</button>
+                    <button class="btn btn-secondary" onclick="exportWordAlignmentCSV()">📥 Экспорт CSV</button>
+                    <button class="btn btn-secondary" onclick="copyStatsToClipboard()">📋 Копировать статистику</button>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Навешиваем обработчики
+            setupDragAndDrop();
+            applyColumnVisibility();
+            applyDiffHighlights();
+            makeEditable();
+        }
+
+        // ==================== ЭКСПОРТ ====================
+        
+        window.exportWordAlignmentCSV = function() {
+            if (!alignedData) return;
+            
+            let csv = '№,Главный список (' + alignedData.main + ')';
+            alignedData.aligned.forEach(name => {
+                csv += ',' + name + ',Тип разночтения';
+            });
+            csv += '\n';
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                csv += (i + 1) + ',"' + alignedData.mainWords[i] + '"';
+                
+                alignedData.alignments.forEach(alignment => {
+                    const pair = alignment[i] || { other: '—' };
+                    const otherWord = pair.other || '—';
+                    const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
+                    csv += ',"' + otherWord + '",' + (diffType || 'совпадение');
+                });
+                
+                csv += '\n';
+            }
+            
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'word_alignment.csv';
+            a.click();
+        };
+
+        window.copyStatsToClipboard = function() {
+            const stats = calculateDiffStats();
+            let text = 'Статистика разночтений:\n';
+            text += `Графические: ${stats.graphic}\n`;
+            text += `Фонетические: ${stats.phonetic}\n`;
+            text += `Морфологические: ${stats.morph}\n`;
+            text += `Лексические: ${stats.lexical}\n`;
+            text += `Совпадения: ${stats.match}\n`;
+            
+            navigator.clipboard.writeText(text);
+            alert('Статистика скопирована!');
+        };
+
+        // ==================== АДАПТИРОВАННЫЕ ФУНКЦИИ ДЛЯ НОВОЙ СТРУКТУРЫ ====================
 
         function renderColumnToggles() {
             if (!alignedData) return '';
@@ -620,7 +953,6 @@
             html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
             html += '<div class="column-toggles-list">';
             
-            // Показываем в исходном порядке (по индексам)
             allColumns.forEach((name, index) => {
                 const checked = columnVisibility[index] ? 'checked' : '';
                 const isMain = index === 0;
@@ -651,7 +983,6 @@
             const table = document.querySelector('.alignment-table');
             if (!table) return;
             
-            // Получаем все заголовки (кроме первого "Стих")
             const headers = table.querySelectorAll('thead th:not(:first-child)');
             
             headers.forEach((th, idx) => {
@@ -663,34 +994,28 @@
                 }
             });
             
-            // Скрываем/показываем ячейки
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td:not(:first-child)');
                 cells.forEach((td, idx) => {
-                    const headerForCell = headers[idx];
-                    if (headerForCell) {
-                        const colIndex = parseInt(headerForCell.dataset.colIndex);
-                        if (!columnVisibility[colIndex]) {
-                            td.classList.add('hidden-column');
-                        } else {
-                            td.classList.remove('hidden-column');
-                        }
+                    const colIdx = parseInt(td.dataset.col);
+                    if (!columnVisibility[colIdx]) {
+                        td.classList.add('hidden-column');
+                    } else {
+                        td.classList.remove('hidden-column');
                     }
                 });
             });
         }
 
-        // Инициализация порядка колонок
         function initColumnOrder() {
             if (!alignedData) return;
-            const totalCols = 1 + alignedData.aligned.length; // +1 для главного
+            const totalCols = 1 + alignedData.aligned.length;
             if (columnOrder.length !== totalCols) {
                 columnOrder = Array.from({ length: totalCols }, (_, i) => i);
             }
         }
         
-        // Перемещение колонки
         function moveColumn(fromIndex, toIndex) {
             if (fromIndex === 0 || toIndex === 0) {
                 alert('Главный список всегда должен быть первым');
@@ -702,176 +1027,179 @@
             const item = columnOrder.splice(fromIndex, 1)[0];
             columnOrder.splice(toIndex, 0, item);
             
-            // Перестраиваем alignedData в соответствии с новым порядком
-            reorderAlignedData();
-            
             return true;
         }
-        
-        // Перестроение alignedData согласно columnOrder
-        function reorderAlignedData() {
+
+        window.resetColumnOrder = function() {
+            if (!alignedData) return;
+            const totalCols = 1 + alignedData.aligned.length;
+            columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            
+            renderWordAlignmentTable();
+            alert('Порядок сброшен');
+        };
+
+        // Адаптированная подсветка для пословного режима
+        function applyDiffHighlights() {
             if (!alignedData) return;
             
-            // Собираем все тексты в правильном порядке
-            const newVerses = alignedData.verses.map(verse => {
-                const newTexts = columnOrder.map(idx => verse.texts[idx]);
-                return { num: verse.num, texts: newTexts };
-            });
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
             
-            alignedData.verses = newVerses;
-            
-            // Обновляем список aligned (имена списков)
-            const allNames = [alignedData.main, ...alignedData.aligned];
-            const newAlignedNames = columnOrder.slice(1).map(idx => allNames[idx]);
-            alignedData.aligned = newAlignedNames;
-        }
-
-        // ==================== ОПРЕДЕЛЕНИЕ ТИПОВ РАЗНОЧТЕНИЙ ====================
-
-        // Графические пары (разные буквы для одного звука)
-        const GRAPHIC_PAIRS = [
-            ['ѹ', 'у'], ['ꙋ', 'у'], ['оу', 'у'],
-            ['ѡ', 'о'], ['ꙩ', 'о'],
-            ['ѣ', 'е'], ['ꙗ', 'я'], ['ѧ', 'я'],
-            ['і', 'и'], ['ї', 'и'], ['ѵ', 'и'],
-            ['ѳ', 'ф'], ['ѯ', 'кс'], ['ѱ', 'пс'],
-            ['ꙁ', 'з'], ['ѕ', 'з'],
-            ['ꙑ', 'ы'], ['ꙓ', 'е'],
-            ['҃', ''], ['҄', ''], ['҅', ''], ['҆', ''], // титла
-            ['·', ''], ['⸱', ''], ['※', ''], ['∽', '']
-        ];
-        
-        // Фонетические признаки (чередования)
-        const PHONETIC_PATTERNS = [
-            ['оро', 'ра'], ['оло', 'ла'], ['ере', 'ре'], ['ело', 'ле'], // полногласие
-            ['жд', 'ж'], ['щ', 'ч'], ['ц', 'ч'], ['з', 'ж'], ['с', 'ш'],
-            ['г', 'ж'], ['к', 'ч'], ['х', 'ш']
-        ];
-        
-        // Морфологические окончания
-        const MORPH_ENDINGS = [
-            ['ъ', ''], ['ь', ''],
-            ['ого', 'ова'], ['его', 'ева'],
-            ['ыя', 'ой'], ['ия', 'ей'],
-            ['ти', 'ть'], ['щи', 'чь'],
-            ['аго', 'ого'], ['яго', 'его'],
-            ['ѣ', 'е']
-        ];
-        
-        function normalizeText(text) {
-            if (!text) return '';
-            // Убираем титла, знаки препинания, приводим к нижнему регистру
-            return text.toLowerCase()
-                .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
-                .replace(/[҃҄҅҆]/g, '')
-                .trim();
-        }
-        
-        function detectDiffType(mainText, otherText) {
-            if (!mainText || !otherText) return null;
-            if (mainText === otherText) return null;
-            
-            const mainNorm = normalizeText(mainText);
-            const otherNorm = normalizeText(otherText);
-            
-            if (mainNorm === otherNorm) return null;
-            
-            // Разбиваем на слова
-            const mainWords = mainNorm.split(/\s+/).filter(w => w.length > 0);
-            const otherWords = otherNorm.split(/\s+/).filter(w => w.length > 0);
-            
-            // === ДЕМОНСТРАЦИОННЫЙ РЕЖИМ ===
-            // Для лабораторной работы показываем разные типы на разных стихах
-            
-            // Графические: если есть слова с ѣ, ѵ, ꙁ и т.д.
-            const hasGraphicChars = /[ѣѵꙁꙋѡꙗѧіїѳѯѱѕꙑꙓ]/.test(mainText) || /[ѣѵꙁꙋѡꙗѧіїѳѯѱѕꙑꙓ]/.test(otherText);
-            
-            // Фонетические: полногласие/неполногласие
-            const hasPhonetic = (mainText.includes('оро') && otherText.includes('ра')) ||
-                                (mainText.includes('оло') && otherText.includes('ла')) ||
-                                (mainText.includes('ере') && otherText.includes('ре')) ||
-                                (mainText.includes('жд') && otherText.includes('ж'));
-            
-            // Морфологические: разные окончания при одинаковой основе
-            let hasMorph = false;
-            for (let i = 0; i < Math.min(mainWords.length, otherWords.length); i++) {
-                const w1 = mainWords[i];
-                const w2 = otherWords[i];
-                if (w1 === w2) continue;
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
                 
-                // Если слова отличаются только последними 1-2 буквами
-                const minLen = Math.min(w1.length, w2.length);
-                if (minLen >= 3) {
-                    const stem1 = w1.substring(0, minLen - 2);
-                    const stem2 = w2.substring(0, minLen - 2);
-                    if (stem1 === stem2 && stem1.length > 0) {
-                        hasMorph = true;
-                        break;
+                const cells = row.querySelectorAll('td.verse-text');
+                const mainWord = alignedData.mainWords[i];
+                
+                cells.forEach((cell, cellIdx) => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    if (colIdx === 0) return; // Главный список не подсвечиваем
+                    
+                    const listIdx = colIdx - 1;
+                    const alignment = alignedData.alignments[listIdx];
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
+                    
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    if (diffType && diffTypesEnabled[diffType]) {
+                        cell.classList.add(getDiffClass(diffType));
+                    }
+                });
+            }
+        }
+
+        // Адаптированное редактирование
+        function makeEditable() {
+            document.querySelectorAll('.verse-text').forEach(cell => {
+                cell.removeEventListener('dblclick', handleDoubleClick);
+                cell.addEventListener('dblclick', handleDoubleClick);
+            });
+        }
+        
+        function handleDoubleClick(e) {
+            const cell = e.currentTarget;
+            
+            if (cell.classList.contains('editing')) return;
+            
+            const originalText = cell.textContent;
+            const rowIdx = parseInt(cell.dataset.row);
+            const colIdx = parseInt(cell.dataset.col);
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = originalText;
+            
+            cell.classList.add('editing');
+            cell.textContent = '';
+            cell.appendChild(textarea);
+            textarea.focus();
+            
+            const save = () => {
+                const newText = textarea.value.trim() || originalText;
+                cell.textContent = newText;
+                cell.classList.remove('editing');
+                
+                // Обновляем alignedData
+                if (alignedData) {
+                    if (colIdx === 0) {
+                        alignedData.mainWords[rowIdx] = newText;
+                    } else {
+                        const listIdx = colIdx - 1;
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][rowIdx]) {
+                            alignedData.alignments[listIdx][rowIdx].other = newText;
+                        }
                     }
                 }
-            }
-            
-            // Определяем тип по приоритету
-            if (hasGraphicChars && mainText.length > 0) {
-                // Проверим, есть ли реальные графические отличия
-                let mainNoGraphic = mainNorm;
-                let otherNoGraphic = otherNorm;
-                for (let [old, new_] of GRAPHIC_PAIRS) {
-                    const regex = new RegExp(old, 'g');
-                    mainNoGraphic = mainNoGraphic.replace(regex, new_);
-                    otherNoGraphic = otherNoGraphic.replace(regex, new_);
-                }
-                if (mainNoGraphic === otherNoGraphic) {
-                    return 'graphic';
-                }
-            }
-            
-            if (hasPhonetic) {
-                return 'phonetic';
-            }
-            
-            if (hasMorph) {
-                return 'morph';
-            }
-            
-            // Проверка на синтаксические (разный порядок слов)
-            const mainSorted = [...mainWords].sort().join(' ');
-            const otherSorted = [...otherWords].sort().join(' ');
-            if (mainSorted === otherSorted && mainWords.length === otherWords.length) {
-                return 'syntax';
-            }
-            
-            // Всё остальное — лексические
-            return 'lexical';
-        }
-        
-        function getDiffClass(type) {
-            if (!type) return '';
-            const classes = {
-                'graphic': 'diff-graphic',
-                'phonetic': 'diff-phonetic',
-                'morph': 'diff-morph',
-                'lexical': 'diff-lexical',
-                'syntax': 'diff-syntax'
-            };
-            return classes[type] || '';
-        }
-        
-        // Анализ разночтений для всей таблицы
-        function analyzeAllDiffs() {
-            if (!alignedData) return;
-            
-            alignedData.verses.forEach(verse => {
-                verse.diffTypes = verse.diffTypes || [];
-                const mainText = verse.texts[0];
                 
-                for (let i = 1; i < verse.texts.length; i++) {
-                    const otherText = verse.texts[i];
-                    const diffType = detectDiffType(mainText, otherText);
-                    verse.diffTypes[i] = diffType;
+                // Обновляем тип разночтения
+                updateDiffTypeForCell(rowIdx, colIdx);
+                exportBtn.disabled = false;
+            };
+            
+            textarea.addEventListener('blur', save);
+            
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    save();
+                }
+                if (e.key === 'Escape') {
+                    cell.textContent = originalText;
+                    cell.classList.remove('editing');
                 }
             });
         }
+
+        function updateDiffTypeForCell(rowIdx, colIdx) {
+            if (colIdx === 0) return;
+            
+            const row = document.querySelectorAll('.alignment-table tbody tr')[rowIdx];
+            if (!row) return;
+            
+            const cells = row.querySelectorAll('td');
+            const mainWord = alignedData.mainWords[rowIdx];
+            const listIdx = colIdx - 1;
+            const alignment = alignedData.alignments[listIdx];
+            const pair = alignment[rowIdx];
+            
+            if (!pair) return;
+            
+            const otherWord = pair.other || '—';
+            const diffType = detectWordDiffType(mainWord, otherWord);
+            
+            // Находим ячейку с типом (следующая после текста)
+            let typeCell = null;
+            for (let i = 0; i < cells.length; i++) {
+                if (cells[i].classList.contains('verse-text') && parseInt(cells[i].dataset.col) === colIdx) {
+                    typeCell = cells[i + 1];
+                    break;
+                }
+            }
+            
+            if (typeCell) {
+                if (diffType) {
+                    typeCell.innerHTML = `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
+                } else {
+                    typeCell.innerHTML = '✓';
+                }
+            }
+            
+            applyDiffHighlights();
+        }
+        
+        function updateAlignedDataFromTable() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
+                
+                const cells = row.querySelectorAll('td.verse-text');
+                
+                cells.forEach(cell => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    const newText = cell.textContent.trim();
+                    
+                    if (colIdx === 0) {
+                        alignedData.mainWords[i] = newText;
+                    } else {
+                        const listIdx = colIdx - 1;
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][i]) {
+                            alignedData.alignments[listIdx][i].other = newText;
+                        }
+                    }
+                });
+            }
+        }
+
+        // ==================== ОСТАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ====================
 
         function renderDiffFilters() {
             let html = '<div class="diff-filters">';
@@ -926,117 +1254,10 @@
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
             applyDiffHighlights();
         };
+
+        // Drag & Drop функции
+        let dragSourceIndex = null;
         
-        function applyDiffHighlights() {
-            if (!alignedData) return;
-            
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            
-            alignedData.verses.forEach((verse, rowIndex) => {
-                const row = rows[rowIndex];
-                if (!row) return;
-                
-                const cells = row.querySelectorAll('td.verse-text');
-                const mainText = verse.texts[0];
-                
-                // Первая ячейка — главный текст (не подсвечиваем)
-                
-                // Остальные ячейки
-                for (let i = 1; i < cells.length; i++) {
-                    const cell = cells[i];
-                    const otherText = verse.texts[i];
-                    
-                    // Убираем старые классы
-                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
-                    
-                    const diffType = detectDiffType(mainText, otherText);
-                    verse.diffTypes = verse.diffTypes || [];
-                    verse.diffTypes[i] = diffType;
-                    
-                    // Применяем класс, если тип включен
-                    if (diffType && diffTypesEnabled[diffType]) {
-                        cell.classList.add(getDiffClass(diffType));
-                    }
-                }
-            });
-        }
-        
-        // Отрисовка таблицы с учётом порядка колонок
-        function renderOrderedTable() {
-            const container = document.getElementById('alignmentResult');
-            const startSheet = folioStart.value || '?';
-            const endSheet = folioEnd.value || '?';
-            
-            initColumnOrder();
-            
-            // Анализируем разночтения
-            analyzeAllDiffs();
-            
-            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
-            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
-            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
-            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">↕️ Перетащите заголовок колонки, чтобы изменить порядок</p>';
-            
-            // Панель фильтрации типов разночтений
-            html += renderDiffFilters();
-            
-            // Панель выбора колонок
-            html += renderColumnToggles();
-            
-            // Все имена списков
-            const allNames = [alignedData.main, ...alignedData.aligned];
-            
-            // Таблица
-            html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
-            
-            // Заголовки в порядке columnOrder
-            columnOrder.forEach((idx, pos) => {
-                const isMain = idx === 0;
-                const name = allNames[idx];
-                const draggableClass = isMain ? '' : 'draggable';
-                const mainBadge = isMain ? ' (главный)' : '';
-                html += `<th class="${draggableClass}" data-col-index="${idx}" data-col-pos="${pos}" draggable="${!isMain}">${name}${mainBadge}</th>`;
-            });
-            
-            html += '</tr></thead><tbody>';
-            
-            alignedData.verses.forEach(verse => {
-                html += '<tr><td><strong>' + verse.num + '</strong></td>';
-                columnOrder.forEach(idx => {
-                    const text = verse.texts[idx] || '—';
-                    html += '<td class="verse-text" data-col="' + idx + '">' + escapeHtml(text) + '</td>';
-                });
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            
-            // Кнопки
-            html += `
-                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
-                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
-                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
-                    <button class="btn btn-secondary" onclick="resetColumnOrder()">🔄 Сбросить порядок</button>
-                </div>
-            `;
-            
-            container.innerHTML = html;
-            
-            // Навешиваем обработчики drag & drop
-            setupDragAndDrop();
-            
-            // Применяем видимость колонок
-            applyColumnVisibility();
-            
-            // Применяем подсветку разночтений
-            applyDiffHighlights();
-            
-            // Включаем редактирование
-            makeEditable();
-        }
-        
-        // Настройка Drag & Drop
         function setupDragAndDrop() {
             const headers = document.querySelectorAll('.alignment-table th.draggable');
             
@@ -1049,8 +1270,6 @@
                 th.addEventListener('drop', handleDrop);
             });
         }
-        
-        let dragSourceIndex = null;
         
         function handleDragStart(e) {
             const th = e.target.closest('th');
@@ -1101,181 +1320,19 @@
             
             if (sourceIndex === null || sourceIndex === targetIndex) return;
             
-            // Получаем индексы в columnOrder
             const sourceOrderIdx = columnOrder[sourceIndex];
             const targetOrderIdx = columnOrder[targetIndex];
             
-            // Нельзя перемещать главный список (индекс 0)
             if (sourceOrderIdx === 0 || targetOrderIdx === 0) {
                 alert('Главный список всегда должен быть первым');
                 return;
             }
             
-            // Перемещаем
             if (moveColumn(sourceIndex, targetIndex)) {
-                renderOrderedTable();
+                renderWordAlignmentTable();
             }
         }
-        
-        window.resetColumnOrder = function() {
-            if (!alignedData) return;
-            const totalCols = 1 + alignedData.aligned.length;
-            columnOrder = Array.from({ length: totalCols }, (_, i) => i);
-            
-            // Восстанавливаем исходный порядок текстов
-            const allNames = [alignedData.main, ...alignedData.aligned];
-            const originalOrder = Array.from({ length: totalCols }, (_, i) => i);
-            
-            alignedData.verses = alignedData.verses.map(verse => {
-                const newTexts = originalOrder.map(idx => verse.texts[idx]);
-                return { num: verse.num, texts: newTexts };
-            });
-            
-            alignedData.aligned = allNames.slice(1);
-            
-            renderOrderedTable();
-            alert('Порядок сброшен');
-        };
-        
-        function renderAlignment() {
-            const container = document.getElementById('alignmentResult');
-            const startSheet = folioStart.value || '?';
-            const endSheet = folioEnd.value || '?';
-            
-            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Результат выравнивания</h3>';
-            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
-            html += '<p style="margin-bottom: 16px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
-            
-            // Панель выбора колонок
-            html += renderColumnToggles();
-            
-            // Таблица
-            html += '<table class="alignment-table"><thead><tr><th>Стих</th>';
-            
-            // Заголовки с data-атрибутами для скрытия
-            html += '<th class="col-header" data-col="0">' + alignedData.main + ' (главный)</th>';
-            alignedData.aligned.forEach((name, idx) => {
-                html += '<th class="col-header" data-col="' + (idx + 1) + '">' + name + '</th>';
-            });
-            html += '</tr></thead><tbody>';
-            
-            alignedData.verses.forEach(verse => {
-                html += '<tr><td><strong>' + verse.num + '</strong></td>';
-                verse.texts.forEach((text, idx) => {
-                    html += '<td class="verse-text" data-col="' + idx + '">' + escapeHtml(text) + '</td>';
-                });
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            
-            // Кнопки
-            html += `
-                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
-                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
-                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
-                </div>
-            `;
-            
-            container.innerHTML = html;
-            
-            // Применяем видимость колонок
-            applyColumnVisibility();
-            
-            // Включаем редактирование
-            makeEditable();
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        // ==================== РУЧНОЕ РЕДАКТИРОВАНИЕ ====================
 
-        function makeEditable() {
-            document.querySelectorAll('.verse-text').forEach(cell => {
-                // Убираем старые обработчики, чтобы не дублировались
-                cell.removeEventListener('dblclick', handleDoubleClick);
-                cell.addEventListener('dblclick', handleDoubleClick);
-            });
-        }
-        
-        function handleDoubleClick(e) {
-            const cell = e.currentTarget;
-            
-            // Если уже редактируется — не трогаем
-            if (cell.classList.contains('editing')) return;
-            
-            const originalText = cell.textContent;
-            const row = cell.closest('tr');
-            const cells = Array.from(row.querySelectorAll('.verse-text'));
-            const colIndex = cells.indexOf(cell);
-            
-            // Создаём textarea
-            const textarea = document.createElement('textarea');
-            textarea.value = originalText;
-            
-            // Сохраняем оригинальный текст
-            cell.classList.add('editing');
-            cell.textContent = '';
-            cell.appendChild(textarea);
-            textarea.focus();
-            
-            // Функция сохранения
-            const save = () => {
-                const newText = textarea.value.trim() || originalText;
-                cell.textContent = newText;
-                cell.classList.remove('editing');
-                
-                // Обновляем alignedData
-                if (alignedData) {
-                    const rowIndex = Array.from(row.parentNode.children).indexOf(row);
-                    if (alignedData.verses[rowIndex]) {
-                        alignedData.verses[rowIndex].texts[colIndex] = newText;
-                    }
-                }
-                
-                // Подсвечиваем, что данные изменены
-                exportBtn.disabled = false;
-            };
-            
-            // Обработчики для textarea
-            textarea.addEventListener('blur', save);
-            
-            textarea.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
-                    e.preventDefault();
-                    save();
-                }
-                if (e.key === 'Escape') {
-                    cell.textContent = originalText;
-                    cell.classList.remove('editing');
-                }
-            });
-        }
-        
-        // Функция для обновления alignedData после любого редактирования
-        function updateAlignedDataFromTable() {
-            if (!alignedData) return;
-            
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            alignedData.verses.forEach((verse, rowIndex) => {
-                if (rows[rowIndex]) {
-                    const cells = rows[rowIndex].querySelectorAll('.verse-text');
-                    verse.texts = Array.from(cells).map(cell => cell.textContent.trim());
-                }
-            });
-        }
-        
-        // Сброс выделения при клике вне таблицы
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.verse-text')) {
-                // Ничего не делаем, просто даём возможность завершить редактирование по blur
-            }
-        });
-        
         // Сессии
         window.saveSession = function() {
             updateAlignedDataFromTable();
@@ -1285,7 +1342,7 @@
                 sheets: { start: folioStart.value, end: folioEnd.value },
                 columnVisibility: columnVisibility,
                 columnOrder: columnOrder,
-                diffTypesEnabled: diffTypesEnabled,  // <-- ДОБАВИТЬ
+                diffTypesEnabled: diffTypesEnabled,
                 timestamp: new Date().toISOString()
             };
             localStorage.setItem('corpusSession', JSON.stringify(session));
@@ -1300,40 +1357,40 @@
                 folioEnd.value = session.sheets.end;
                 if (session.columnVisibility) columnVisibility = session.columnVisibility;
                 if (session.columnOrder) columnOrder = session.columnOrder;
-                if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;  // <-- ДОБАВИТЬ
+                if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;
                 alert('Загружена сессия от ' + session.timestamp);
             } else {
                 alert('Нет сохранённой сессии');
             }
         };
         
-        // Экспорт XML
+        // Экспорт XML (адаптирован для пословного режима)
         exportBtn.addEventListener('click', () => {
-            // Синхронизируем данные из таблицы перед экспортом
             updateAlignedDataFromTable();
             
             if (!alignedData) return;
             
-            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Притча о блудном сыне</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Пословное выравнивание</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
             xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
             alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
             xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n';
             
-            alignedData.verses.forEach(verse => {
-                xml += '      <div type="verse" n="' + verse.num + '">\n';
-                xml += '        <ab wit="#main">' + verse.texts[0] + '</ab>\n';
-                verse.texts.slice(1).forEach((text, i) => {
-                    xml += '        <ab wit="#wit' + i + '">' + text + '</ab>\n';
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                xml += '      <div type="alignment" n="' + (i+1) + '">\n';
+                xml += '        <seg wit="#main">' + alignedData.mainWords[i] + '</seg>\n';
+                alignedData.alignments.forEach((alignment, idx) => {
+                    const pair = alignment[i] || { other: '—' };
+                    xml += '        <seg wit="#wit' + idx + '">' + (pair.other || '—') + '</seg>\n';
                 });
                 xml += '      </div>\n';
-            });
+            }
             
             xml += '    </body>\n  </text>\n</TEI>';
             
             const blob = new Blob([xml], { type: 'application/xml' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'parallel_corpus.xml';
+            a.download = 'word_alignment.xml';
             a.click();
         });
     </script>
