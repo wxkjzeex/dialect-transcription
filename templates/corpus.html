@@ -5,56 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Параллельный корпус · Притча о блудном сыне</title>
     <style>
-
-        * ==================== ПОДКЛЮЧЕНИЕ ШРИФТОВ ==================== */
+        /* ==================== ПОДКЛЮЧЕНИЕ ШРИФТОВ ==================== */
         
-        /* BukyVede - основной шрифт для церковнославянского */
-        @font-face {
-            font-family: 'BukyVede';
-            src: url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.woff2') format('woff2'),
-                 url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.woff') format('woff'),
-                 url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.ttf') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-        }
+        /* Google Fonts - надёжные шрифты с поддержкой кириллицы */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600&display=swap');
         
-        /* Menaion Unicode - для надстрочных знаков и титл */
-        @font-face {
-            font-family: 'Menaion Unicode';
-            src: url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.woff2') format('woff2'),
-                 url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.woff') format('woff'),
-                 url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.ttf') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-        }
-        
-        /* Fedorovsk Unicode - альтернативный шрифт */
-        @font-face {
-            font-family: 'Fedorovsk Unicode';
-            src: url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.woff2') format('woff2'),
-                 url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.woff') format('woff'),
-                 url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.ttf') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-        }
-        
-        /* Noto Sans - fallback для обычной кириллицы */
-        @font-face {
-            font-family: 'Noto Sans';
-            src: url('https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A-PN4.woff2') format('woff2');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-        }
-        
-        /* ==================== ОСНОВНЫЕ СТИЛИ ==================== */
+        /* Локальный fallback для церковнославянских символов через системные шрифты */
+        /* Windows и Mac имеют встроенные шрифты с поддержкой исторической кириллицы */
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'BukyVede', 'Menaion Unicode', 'Fedorovsk Unicode', 'Noto Sans', 'Segoe UI', serif;
+            font-family: 
+                'Noto Serif',           /* Основной с засечками */
+                'Noto Sans',            /* Без засечек */
+                'Times New Roman',      /* Windows fallback */
+                'Times',                /* Mac fallback */
+                'Arial Unicode MS',     /* Windows - широкий охват Unicode */
+                'Lucida Grande',        /* Mac - широкий охват Unicode */
+                'Segoe UI',             /* Windows UI */
+                'DejaVu Sans',          /* Linux */
+                serif;
             background: #f5efe6;
             min-height: 100vh;
             padding: 24px;
@@ -153,10 +124,10 @@
             padding: 12px;
             border: 1px solid #d4c5b0;
             vertical-align: top;
-            font-family: 'BukyVede', 'Menaion Unicode', serif;
+            font-family: 'Noto Serif', 'Times New Roman', 'Arial Unicode MS', serif;
         }
         .alignment-table tr:hover td { background: #faf5ef; }
-                .verse-text {
+        .verse-text {
             font-size: 15px;
             color: #2c241a;
             cursor: text;
@@ -172,7 +143,7 @@
             width: 100%;
             min-height: 80px;
             padding: 8px;
-            font-family: 'BukyVede', 'Menaion Unicode', serif;
+            font-family: 'Noto Serif', 'Times New Roman', 'Arial Unicode MS', serif;
             font-size: 14px;
             border: 2px solid #b89a7a;
             border-radius: 6px;
@@ -186,7 +157,8 @@
             border-radius: 8px;
             text-align: center;
         }
-                /* Панель выбора колонок */
+        
+        /* Панель выбора колонок */
         .column-toggles {
             background: #f8f2ea;
             border-radius: 12px;
@@ -232,14 +204,14 @@
             opacity: 0.5;
             background: #e0d3c4;
         }
-        /* Скрытые колонки */
         .hidden-column {
             display: none !important;
         }
         .alignment-table .hidden-column {
             display: none;
         }
-                /* Drag & Drop для колонок */
+        
+        /* Drag & Drop для колонок */
         .alignment-table th.draggable {
             cursor: grab;
             user-select: none;
@@ -271,31 +243,8 @@
             opacity: 0.5;
             cursor: grabbing;
         }
-        /* Кнопки управления порядком (альтернатива drag & drop) */
-        .column-order-controls {
-            display: flex;
-            gap: 4px;
-            margin-left: 8px;
-        }
-        .order-btn {
-            padding: 2px 6px;
-            background: #d4c5b0;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            color: #3e3225;
-            transition: all 0.2s;
-        }
-        .order-btn:hover {
-            background: #b89a7a;
-            color: white;
-        }
-        .order-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-                /* Типы разночтений */
+        
+        /* Типы разночтений */
         .diff-graphic {
             background: #fde2e4 !important;
             border-bottom: 2px solid #c0392b;
