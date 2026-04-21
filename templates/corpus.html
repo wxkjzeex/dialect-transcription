@@ -5,9 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Параллельный корпус · Притча о блудном сыне</title>
     <style>
+
+        * ==================== ПОДКЛЮЧЕНИЕ ШРИФТОВ ==================== */
+        
+        /* BukyVede - основной шрифт для церковнославянского */
+        @font-face {
+            font-family: 'BukyVede';
+            src: url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.woff2') format('woff2'),
+                 url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.woff') format('woff'),
+                 url('https://fonts.orthodoxy.ru/BukyVede/BukyVede.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        /* Menaion Unicode - для надстрочных знаков и титл */
+        @font-face {
+            font-family: 'Menaion Unicode';
+            src: url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.woff2') format('woff2'),
+                 url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.woff') format('woff'),
+                 url('https://fonts.orthodoxy.ru/MenaionUnicode/MenaionUnicode.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        /* Fedorovsk Unicode - альтернативный шрифт */
+        @font-face {
+            font-family: 'Fedorovsk Unicode';
+            src: url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.woff2') format('woff2'),
+                 url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.woff') format('woff'),
+                 url('https://fonts.orthodoxy.ru/FedorovskUnicode/FedorovskUnicode.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        /* Noto Sans - fallback для обычной кириллицы */
+        @font-face {
+            font-family: 'Noto Sans';
+            src: url('https://fonts.gstatic.com/s/notosans/v36/o-0mIpQlx3QUlC5A-PN4.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        /* ==================== ОСНОВНЫЕ СТИЛИ ==================== */
+        
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'BukyVede', 'Menaion Unicode', 'Segoe UI', serif;
+            font-family: 'BukyVede', 'Menaion Unicode', 'Fedorovsk Unicode', 'Noto Sans', 'Segoe UI', serif;
             background: #f5efe6;
             min-height: 100vh;
             padding: 24px;
