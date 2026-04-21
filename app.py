@@ -68,6 +68,94 @@ def text_to_phonetic(text):
     
     return ' '.join(processed)
 
+    # Правила для кириллической фонетической транскрипции
+LETTER_TO_CYRILLIC_PHONEME = {
+    'а': 'а', 'б': 'б', 'в': 'в', 'г': 'г', 'д': 'д',
+    'е': 'йэ', 'ё': 'йо', 'ж': 'ж', 'з': 'з', 'и': 'и',
+    'й': 'й', 'к': 'к', 'л': 'л', 'м': 'м', 'н': 'н',
+    'о': 'о', 'п': 'п', 'р': 'р', 'с': 'с', 'т': 'т',
+    'у': 'у', 'ф': 'ф', 'х': 'х', 'ц': 'ц', 'ч': 'ч',
+    'ш': 'ш', 'щ': 'щ', 'ъ': '', 'ы': 'ы', 'ь': "'",
+    'э': 'э', 'ю': 'йу', 'я': 'йа'
+}
+
+# Правила редукции гласных для кириллической транскрипции
+VOWEL_REDUCTION_CYRILLIC = {
+    'о': 'а',  # аканье
+    'е': 'и',  # иканье
+    'я': 'и'   # иканье
+}
+
+def text_to_cyrillic_phonetic(text):
+    """Преобразование в кириллическую фонетическую транскрипцию"""
+    if not text:
+        return ""
+    
+    text = text.lower().strip()
+    phonetic = []
+    words = text.split()
+    
+    for word in words:
+        word_phonetic = []
+        i = 0
+        
+        # Определяем ударную гласную (упрощённо - первая "о" или "е")
+        stressed_pos = -1
+        for j, ch in enumerate(word):
+            if ch in 'оея':
+                stressed_pos = j
+                break
+        
+        while i < len(word):
+            char = word[i]
+            
+            # Обработка двухбуквенных сочетаний
+            if i < len(word) - 1:
+                two = word[i:i+2]
+                if two == 'тс':
+                    word_phonetic.append('ц')
+                    i += 2
+                    continue
+                elif two == 'дж':
+                    word_phonetic.append('дж')
+                    i += 2
+                    continue
+            
+            if char in LETTER_TO_CYRILLIC_PHONEME:
+                phoneme = LETTER_TO_CYRILLIC_PHONEME[char]
+                
+                # Применяем редукцию для безударных гласных
+                if char in VOWEL_REDUCTION_CYRILLIC and i != stressed_pos:
+                    # Проверяем предударную позицию
+                    if i == stressed_pos - 1:
+                        # Первый предударный - редуцируется
+                        phoneme = VOWEL_REDUCTION_CYRILLIC[char]
+                    elif i < stressed_pos - 1 or i > stressed_pos:
+                        # Другие безударные - сильная редукция
+                        if char == 'о':
+                            phoneme = 'ъ'
+                        elif char in 'ея':
+                            phoneme = 'ь'
+                
+                if phoneme:
+                    word_phonetic.append(phoneme)
+            elif char == ' ':
+                word_phonetic.append(' ')
+            else:
+                word_phonetic.append(char)
+            i += 1
+        
+        # Оглушение конечных согласных
+        if word_phonetic:
+            voiced = {'б': 'п', 'в': 'ф', 'г': 'к', 'д': 'т', 'ж': 'ш', 'з': 'с'}
+            last_char = word_phonetic[-1]
+            if last_char in voiced:
+                word_phonetic[-1] = voiced[last_char]
+        
+        phonetic.append(''.join(word_phonetic))
+    
+    return ' '.join(phonetic)
+
 
 # ==================== МАРШРУТЫ ====================
 
@@ -211,13 +299,15 @@ def transcribe():
             audio = recognizer.record(source)
         
         text = recognizer.recognize_google(audio, language='ru-RU')
-        phonetic = text_to_phonetic(text)
+        phonetic_ipa = text_to_phonetic(text)
+        phonetic_cyrillic = text_to_cyrillic_phonetic(text)
         
         os.unlink(wav_path)
         
         return jsonify({
             'orthographic': text,
-            'phonetic': phonetic
+            'phonetic_ipa': phonetic_ipa,
+            'phonetic_cyrillic': phonetic_cyrillic
         })
     
     except sr.UnknownValueError:
