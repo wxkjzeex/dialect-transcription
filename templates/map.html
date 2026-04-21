@@ -385,34 +385,74 @@
                     <div class="legend-item"><span class="legend-color" style="background:#ffc107;"></span> Найдена лексема</div>
                     <div class="legend-item"><span class="legend-color" style="background:#e74c3c;"></span> Выбранный пункт</div>
                 </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #7f8c8d;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <span style="width:20px; height:3px; background:#e74c3c;"></span> орать
+                        <span style="width:20px; height:3px; background:#3498db; margin-left:12px;"></span> пахать
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                        <span style="width:20px; height:3px; background:#e67e22;"></span> кочет
+                        <span style="width:20px; height:3px; background:#2ecc71; margin-left:12px;"></span> петух
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="width:20px; height:3px; background:#9b59b6;"></span> кушак
+                    </div>
+                </div>
             </div>
 
-            <!-- Изоглоссы -->
+                        <!-- Изоглоссы -->
             <div class="section">
                 <div class="section-title">📈 Изоглоссы и ареалы</div>
                 <div class="isogloss-control">
                     <div class="isogloss-title">Лексические изоглоссы</div>
-                    <div class="isogloss-item">
-                        <input type="checkbox" id="chkOrat" checked onchange="toggleIsogloss('orat')">
-                        <span class="isogloss-color-area" style="background:#e74c3c; border-color:#c0392b;"></span>
-                        <span style="flex:1">"орать" / "пахать"</span>
-                        <span style="font-size:11px; color:#7f8c8d;">север/юг</span>
+                    
+                    <!-- Группа: орать / пахать -->
+                    <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #ddd;">
+                        <div style="font-weight:600; font-size:13px; margin-bottom: 6px; color:#2c3e50;">🌾 Пахота</div>
+                        <div class="isogloss-item">
+                            <input type="checkbox" id="chkOrat" checked onchange="toggleIsogloss('orat')">
+                            <span class="isogloss-color-area" style="background:#e74c3c; border-color:#c0392b;"></span>
+                            <span style="flex:1">"орать"</span>
+                            <span style="font-size:11px; color:#7f8c8d;">север</span>
+                        </div>
+                        <div class="isogloss-item">
+                            <input type="checkbox" id="chkPahat" checked onchange="toggleIsogloss('pahat')">
+                            <span class="isogloss-color-area" style="background:#3498db; border-color:#2980b9;"></span>
+                            <span style="flex:1">"пахать"</span>
+                            <span style="font-size:11px; color:#7f8c8d;">юг</span>
+                        </div>
                     </div>
-                    <div class="isogloss-item">
-                        <input type="checkbox" id="chkKochet" checked onchange="toggleIsogloss('kochet')">
-                        <span class="isogloss-color-area" style="background:#3498db; border-color:#2980b9;"></span>
-                        <span style="flex:1">"кочет" / "петух"</span>
-                        <span style="font-size:11px; color:#7f8c8d;">север/юг</span>
+                    
+                    <!-- Группа: кочет / петух -->
+                    <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #ddd;">
+                        <div style="font-weight:600; font-size:13px; margin-bottom: 6px; color:#2c3e50;">🐓 Петух</div>
+                        <div class="isogloss-item">
+                            <input type="checkbox" id="chkKochet" checked onchange="toggleIsogloss('kochet')">
+                            <span class="isogloss-color-area" style="background:#e67e22; border-color:#d35400;"></span>
+                            <span style="flex:1">"кочет"</span>
+                            <span style="font-size:11px; color:#7f8c8d;">север</span>
+                        </div>
+                        <div class="isogloss-item">
+                            <input type="checkbox" id="chkPetuh" checked onchange="toggleIsogloss('petuh')">
+                            <span class="isogloss-color-area" style="background:#2ecc71; border-color:#27ae60;"></span>
+                            <span style="flex:1">"петух"</span>
+                            <span style="font-size:11px; color:#7f8c8d;">юг</span>
+                        </div>
                     </div>
-                    <div class="isogloss-item">
-                        <input type="checkbox" id="chkKushak" checked onchange="toggleIsogloss('kushak')">
-                        <span class="isogloss-color-area" style="background:#2ecc71; border-color:#27ae60;"></span>
-                        <span style="flex:1">"кушак" (пояс)</span>
-                        <span style="font-size:11px; color:#7f8c8d;">северо-восток</span>
+                    
+                    <!-- Группа: кушак -->
+                    <div>
+                        <div style="font-weight:600; font-size:13px; margin-bottom: 6px; color:#2c3e50;">👔 Пояс</div>
+                        <div class="isogloss-item">
+                            <input type="checkbox" id="chkKushak" checked onchange="toggleIsogloss('kushak')">
+                            <span class="isogloss-color-area" style="background:#9b59b6; border-color:#8e44ad;"></span>
+                            <span style="flex:1">"кушак"</span>
+                            <span style="font-size:11px; color:#7f8c8d;">северо-восток</span>
+                        </div>
                     </div>
                 </div>
                 <div style="font-size:11px; color:#95a5a6; margin-top:8px;">
-                    ✓ Отметьте для отображения ареалов
+                    ✓ Отметьте для отображения ареалов и изоглосс
                 </div>
             </div>
 
@@ -708,10 +748,12 @@
             document.getElementById('searchStats').style.display = 'block';
         }
 
-        // ==================== ИЗОГЛОССЫ ====================
+                // ==================== ИЗОГЛОССЫ ====================
         let isoglossLayers = {
             orat: null,
+            pahat: null,
             kochet: null,
+            petuh: null,
             kushak: null
         };
 
@@ -719,139 +761,164 @@
         const isoglossPolygons = {
             // Ареал "орать" (север Удмуртии + Кировская обл.)
             orat: [
-                [58.8, 51.5], // северо-запад (Киров)
-                [58.8, 54.0], // северо-восток (Глазов)
+                [58.9, 51.0], // северо-запад
+                [58.9, 54.0], // северо-восток
                 [57.5, 54.0], // восток (Дебёсы)
-                [57.0, 53.0], // юго-восток
-                [56.5, 52.0], // юг
-                [57.0, 51.0], // юго-запад
-                [58.8, 51.5]  // обратно
+                [57.2, 53.2], // юго-восток
+                [57.0, 52.5], // юг
+                [57.2, 51.5], // юго-запад
+                [58.0, 51.2], // запад
+                [58.9, 51.0]  // обратно
+            ],
+            // Ареал "пахать" (юг Удмуртии + Татарстан)
+            pahat: [
+                [57.0, 51.5], // северо-запад
+                [57.0, 54.0], // северо-восток
+                [56.2, 54.0], // восток
+                [55.8, 53.0], // юго-восток
+                [55.8, 51.5], // юг
+                [56.5, 51.0], // юго-запад
+                [57.0, 51.5]  // обратно
             ],
             // Ареал "кочет" (северная часть)
             kochet: [
-                [58.6, 51.8],
-                [58.6, 54.0],
-                [57.8, 54.0],
-                [57.8, 53.5],
-                [57.5, 53.0],
-                [57.8, 51.8],
-                [58.6, 51.8]
+                [58.8, 51.5],
+                [58.8, 54.2],
+                [57.6, 54.2],
+                [57.4, 53.5],
+                [57.2, 53.0],
+                [57.6, 51.5],
+                [58.8, 51.5]
+            ],
+            // Ареал "петух" (центральная и южная часть)
+            petuh: [
+                [57.6, 51.5],
+                [57.6, 53.8],
+                [56.5, 53.8],
+                [56.2, 53.0],
+                [56.0, 52.0],
+                [56.5, 51.2],
+                [57.6, 51.5]
             ],
             // Ареал "кушак" (северо-восток Удмуртии)
             kushak: [
                 [58.2, 52.8],
-                [58.2, 54.0],
-                [57.5, 54.0],
-                [57.3, 53.5],
-                [57.5, 52.8],
+                [58.2, 54.2],
+                [57.4, 54.2],
+                [57.2, 53.5],
+                [57.4, 52.8],
                 [58.2, 52.8]
             ]
         };
 
-        // Линии изоглосс
+        // Линии изоглосс (границы между ареалами)
         const isoglossLines = {
             // Граница орать/пахать
             orat: [
-                [58.0, 51.3],
+                [58.2, 51.2],
                 [57.8, 51.8],
-                [57.5, 52.2],
-                [57.2, 52.8],
-                [56.8, 53.2],
-                [56.5, 53.5],
-                [56.3, 54.0]
+                [57.5, 52.5],
+                [57.2, 53.0],
+                [57.0, 53.5],
+                [56.8, 54.0]
+            ],
+            pahat: [
+                [58.2, 51.2],
+                [57.8, 51.8],
+                [57.5, 52.5],
+                [57.2, 53.0],
+                [57.0, 53.5],
+                [56.8, 54.0]
             ],
             // Граница кочет/петух
             kochet: [
-                [58.3, 51.5],
+                [58.4, 51.5],
                 [58.0, 52.0],
-                [57.7, 52.5],
-                [57.5, 53.0],
-                [57.3, 53.5],
-                [57.5, 54.0]
+                [57.7, 52.8],
+                [57.5, 53.5],
+                [57.3, 54.0]
+            ],
+            petuh: [
+                [58.4, 51.5],
+                [58.0, 52.0],
+                [57.7, 52.8],
+                [57.5, 53.5],
+                [57.3, 54.0]
             ],
             // Граница кушака
             kushak: [
                 [58.0, 52.5],
                 [57.8, 53.0],
-                [57.5, 53.3],
-                [57.2, 53.5]
+                [57.5, 53.5],
+                [57.2, 54.0]
             ]
+        };
+
+        // Цвета для каждого типа
+        const isoglossColors = {
+            orat: '#e74c3c',      // красный
+            pahat: '#3498db',     // синий
+            kochet: '#e67e22',    // оранжевый
+            petuh: '#2ecc71',     // зелёный
+            kushak: '#9b59b6'     // фиолетовый
+        };
+
+        // Названия для подписей
+        const isoglossNames = {
+            orat: 'орать',
+            pahat: 'пахать',
+            kochet: 'кочет',
+            petuh: 'петух',
+            kushak: 'кушак'
         };
 
         function drawIsogloss(type) {
             const layerGroup = L.layerGroup();
+            const color = isoglossColors[type];
 
             // Полигон (ареал)
             if (isoglossPolygons[type]) {
                 L.polygon(isoglossPolygons[type], {
-                    color: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71'),
+                    color: color,
                     weight: 1,
-                    opacity: 0.6,
-                    fillOpacity: 0.15,
-                    fillColor: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71')
+                    opacity: 0.5,
+                    fillOpacity: 0.12,
+                    fillColor: color
                 }).bindPopup(`
-                    <b>${type === 'orat' ? 'Ареал "орать"' : (type === 'kochet' ? 'Ареал "кочет"' : 'Ареал "кушак"')}</b><br>
-                    <small>Севернорусские говоры</small>
+                    <b>Ареал "${isoglossNames[type]}"</b><br>
+                    <small>${type === 'orat' || type === 'kochet' ? 'Севернорусские говоры' : (type === 'pahat' || type === 'petuh' ? 'Южнорусские говоры' : 'Локальный ареал')}</small>
                 `).addTo(layerGroup);
             }
 
             // Линия изоглоссы
             if (isoglossLines[type]) {
                 L.polyline(isoglossLines[type], {
-                    color: type === 'orat' ? '#e74c3c' : (type === 'kochet' ? '#3498db' : '#2ecc71'),
+                    color: color,
                     weight: 3,
-                    opacity: 0.8,
+                    opacity: 0.7,
                     dashArray: '8, 6',
                     className: 'isogloss-line'
                 }).bindPopup(`
-                    <b>Изоглосса: ${type === 'orat' ? 'орать/пахать' : (type === 'kochet' ? 'кочет/петух' : 'кушак/пояс')}</b><br>
+                    <b>Изоглосса: "${isoglossNames[type]}"</b><br>
                     <small>Граница распространения лексемы</small>
                 `).addTo(layerGroup);
             }
 
-            // Добавляем подписи к ареалам
-            if (type === 'orat') {
-                L.marker([58.2, 52.5], {
-                    icon: L.divIcon({
-                        className: 'isogloss-label',
-                        html: '<span style="background:rgba(231,76,60,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">орать</span>',
-                        iconSize: [60, 20]
-                    })
-                }).addTo(layerGroup);
+            // Подписи ареалов (только для основных, чтобы не загромождать)
+            const labelPositions = {
+                orat: [58.2, 52.5],
+                pahat: [56.5, 52.8],
+                kochet: [58.0, 53.0],
+                petuh: [56.8, 53.0],
+                kushak: [57.8, 53.3]
+            };
 
-                L.marker([56.5, 52.8], {
+            if (labelPositions[type]) {
+                L.marker(labelPositions[type], {
                     icon: L.divIcon({
                         className: 'isogloss-label',
-                        html: '<span style="background:rgba(52,152,219,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">пахать</span>',
-                        iconSize: [60, 20]
-                    })
-                }).addTo(layerGroup);
-            }
-
-            if (type === 'kochet') {
-                L.marker([58.0, 53.0], {
-                    icon: L.divIcon({
-                        className: 'isogloss-label',
-                        html: '<span style="background:rgba(52,152,219,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">кочет</span>',
-                        iconSize: [55, 20]
-                    })
-                }).addTo(layerGroup);
-
-                L.marker([56.8, 53.0], {
-                    icon: L.divIcon({
-                        className: 'isogloss-label',
-                        html: '<span style="background:rgba(46,204,113,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">петух</span>',
-                        iconSize: [55, 20]
-                    })
-                }).addTo(layerGroup);
-            }
-
-            if (type === 'kushak') {
-                L.marker([57.8, 53.2], {
-                    icon: L.divIcon({
-                        className: 'isogloss-label',
-                        html: '<span style="background:rgba(46,204,113,0.8); color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">кушак</span>',
-                        iconSize: [55, 20]
+                        html: `<span style="background:${color}CC; color:white; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap;">${isoglossNames[type]}</span>`,
+                        iconSize: [70, 20]
                     })
                 }).addTo(layerGroup);
             }
@@ -860,17 +927,15 @@
         }
 
         window.toggleIsogloss = function (type) {
+            if (!isoglossLayers[type]) {
+                isoglossLayers[type] = drawIsogloss(type);
+            }
+            
             const checkbox = document.getElementById(`chk${type.charAt(0).toUpperCase() + type.slice(1)}`);
-
-            if (checkbox.checked) {
-                if (!isoglossLayers[type]) {
-                    isoglossLayers[type] = drawIsogloss(type);
-                }
+            if (checkbox && checkbox.checked) {
                 isoglossLayers[type].addTo(map);
             } else {
-                if (isoglossLayers[type]) {
-                    map.removeLayer(isoglossLayers[type]);
-                }
+                map.removeLayer(isoglossLayers[type]);
             }
         };
 
@@ -878,7 +943,9 @@
             // Включаем все изоглоссы по умолчанию
             setTimeout(() => {
                 toggleIsogloss('orat');
+                toggleIsogloss('pahat');
                 toggleIsogloss('kochet');
+                toggleIsogloss('petuh');
                 toggleIsogloss('kushak');
             }, 500);
         }
