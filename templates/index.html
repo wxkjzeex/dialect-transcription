@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Транскрипция диалектной речи</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Old+Standard+TT:ital@0;1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -503,7 +504,7 @@
             processBtn.disabled = true;
         };
         
-        processBtn.addEventListener('click', async () => {
+                processBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
             
             results.style.display = 'none';
@@ -529,7 +530,8 @@
                 
                 if (response.ok) {
                     document.getElementById('orthographicResult').textContent = data.orthographic;
-                    document.getElementById('phoneticResult').textContent = '/' + data.phonetic + '/';
+                    document.getElementById('phoneticIpaResult').textContent = '/' + (data.phonetic_ipa || data.phonetic) + '/';
+                    document.getElementById('phoneticCyrillicResult').textContent = '[' + data.phonetic_cyrillic + ']';
                     results.style.display = 'block';
                 } else {
                     showError(data.error || 'Ошибка обработки');
