@@ -371,6 +371,37 @@
             letter-spacing: 3px;
             text-transform: uppercase;
         }
+
+        /* Аудиоплеер */
+        .audio-player {
+            margin-top: 20px;
+            padding: 16px 20px;
+            background: #f8f2ea;
+            border-radius: 48px;
+            border: 1px solid #d4c5b0;
+        }
+        
+        .audio-player audio {
+            width: 100%;
+            height: 40px;
+            border-radius: 40px;
+            outline: none;
+        }
+        
+        .audio-player audio::-webkit-media-controls-panel {
+            background: #fffbf5;
+        }
+        
+        .audio-player audio::-webkit-media-controls-play-button {
+            background-color: #b89a7a;
+            border-radius: 50%;
+        }
+        
+        .audio-player audio::-webkit-media-controls-current-time-display,
+        .audio-player audio::-webkit-media-controls-time-remaining-display {
+            color: #5d4e37;
+            font-family: 'Montserrat', sans-serif;
+        }
     </style>
 </head>
 <body>
@@ -400,6 +431,8 @@
             <input type="file" id="fileInput" accept="audio/*">
             
             <div id="selectedFileInfo" style="display: none;"></div>
+
+            <div id="audioPlayerContainer" style="display: none;"></div>
             
             <button class="btn" id="processBtn" disabled>⟡ Расшифровать ⟡</button>
             
@@ -456,6 +489,7 @@
         const selectedFileInfo = document.getElementById('selectedFileInfo');
         
         let selectedFile = null;
+        let audioURL = null;
         
         dropZone.addEventListener('click', () => fileInput.click());
         
@@ -486,6 +520,8 @@
             }
             selectedFile = file;
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            
+            // Отображаем информацию о файле
             selectedFileInfo.style.display = 'block';
             selectedFileInfo.innerHTML = `
                 <div class="selected-file">
@@ -493,6 +529,24 @@
                     <span class="remove-file" onclick="clearFile()">✕</span>
                 </div>
             `;
+            
+            // Создаём аудиоплеер
+            if (audioURL) {
+                URL.revokeObjectURL(audioURL);
+            }
+            audioURL = URL.createObjectURL(file);
+            
+            const audioContainer = document.getElementById('audioPlayerContainer');
+            audioContainer.style.display = 'block';
+            audioContainer.innerHTML = `
+                <div class="audio-player">
+                    <audio controls>
+                        <source src="${audioURL}" type="${file.type || 'audio/mpeg'}">
+                        Ваш браузер не поддерживает аудиоплеер.
+                    </audio>
+                </div>
+            `;
+            
             processBtn.disabled = false;
             hideError();
         }
@@ -501,6 +555,14 @@
             selectedFile = null;
             fileInput.value = '';
             selectedFileInfo.style.display = 'none';
+            document.getElementById('audioPlayerContainer').style.display = 'none';
+            document.getElementById('audioPlayerContainer').innerHTML = '';
+            
+            if (audioURL) {
+                URL.revokeObjectURL(audioURL);
+                audioURL = null;
+            }
+            
             processBtn.disabled = true;
         };
         
