@@ -248,6 +248,18 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             border: 1px solid #e0d3c4;
         }
+
+        .cyrillic-text {
+            font-family: 'Noto Serif', 'Times New Roman', serif;
+            font-size: 26px;
+            background: #fffbf5;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #b89a7a;
+            color: #2c241a;
+            letter-spacing: 0.5px;
+            margin-top: 16px;
+        }
         
         .result-label {
             display: flex;
@@ -403,9 +415,17 @@
                     <div class="result-box">
                         <div class="result-label">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h3v4H3z M8 6h2v12H8z M13 8h2v8h-2z M18 10h3v4h-3z"/></svg>
-                            Фонетическая транскрипция
+                            Фонетическая транскрипция (IPA)
                         </div>
-                        <div class="phonetic-text" id="phoneticResult"></div>
+                        <div class="phonetic-text" id="phoneticIpaResult"></div>
+                    </div>
+                    
+                    <div class="result-box">
+                        <div class="result-label">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h3v4H3z M8 6h2v12H8z M13 8h2v8h-2z M18 10h3v4h-3z"/></svg>
+                            Фонетическая транскрипция (кириллица)
+                        </div>
+                        <div class="cyrillic-text" id="phoneticCyrillicResult"></div>
                     </div>
                 </div>
             </div>
