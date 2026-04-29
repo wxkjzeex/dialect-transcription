@@ -480,6 +480,8 @@
     </div>
 
     <script>
+        import re
+
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const processBtn = document.getElementById('processBtn');
@@ -512,6 +514,42 @@
         fileInput.addEventListener('change', (e) => {
             if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
         });
+
+        def parse_tei(xml_file):
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+        
+            words = []
+            
+            # Паттерны для пропуска служебных токенов
+            SKIP_PATTERNS = [
+                re.compile(r'^[⩫∽※⁘]+$'),      # знаки
+                re.compile(r'^[рсмгдвзчклф][҃ⷠⷣⷡⷢⷤⷥⷨⷩⷪⷫⷬⷭⷮⷯⷰⷱⷲⷳⷴⷵⷶⷷⷸⷹⷺⷻⷼⷽⷾⷿ]+$'),  # номера зачал
+                re.compile(r'^[ ·⸱:]+$'),       # пробелы и точки
+            ]
+            
+            def should_skip(text):
+                if not text or not text.strip():
+                    return True
+                for pat in SKIP_PATTERNS:
+                    if pat.match(text.strip()):
+                        return True
+                return False
+        
+            for el in root.iter():
+                tag = el.tag.split('}')[-1]
+        
+                if tag in ['w', 'pc']:
+                    text = ''.join(el.itertext()).strip()
+                    if text and not should_skip(text):
+                        words.append(text)
+        
+            full_text = ' '.join(words)
+        
+            return {
+                'words': words,
+                'fullText': full_text
+            }
         
         function handleFile(file) {
             if (file.size > 25 * 1024 * 1024) {
