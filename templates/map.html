@@ -493,7 +493,12 @@
             <!-- Поиск по вопросам -->
             <div class="section">
                 <div class="section-title">❓ Поиск по вопросам ЛАРНГ</div>
-                <input type="text" id="questionSearch" placeholder="Введите текст вопроса... (глагол, петух, пояс)">
+                <select id="questionSearch" style="width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white;">
+                    <option value="">Все вопросы</option>
+                    <option value="Глагол 'пахать' (землю, огород)">L 205 — Глагол 'пахать' (землю, огород)</option>
+                    <option value="Название петуха">L 312 — Название петуха</option>
+                    <option value="Название пояса, кушака">L 504 — Название пояса, кушака</option>
+                </select>
                 <button id="resetQuestionSearchBtn" style="width:100%; padding:6px; margin-top:8px; background:#95a5a6; color:white; border:none; border-radius:4px; cursor:pointer;">Сбросить поиск по вопросам</button>
                 <div id="questionSearchStats" class="search-stats" style="display:none; margin-top:10px;"></div>
             </div>
@@ -1187,7 +1192,8 @@
         let currentQuestionSearch = '';
 
         function filterByQuestion() {
-            const term = document.getElementById('questionSearch').value.trim().toLowerCase();
+            const select = document.getElementById('questionSearch');
+            const term = select.value.trim().toLowerCase();
             currentQuestionSearch = term;
 
             if (!term) {
@@ -1659,7 +1665,7 @@
                 if (e.key === 'Enter') performSearch();
             });
 
-            document.getElementById('questionSearch').addEventListener('input', filterByQuestion);
+            document.getElementById('questionSearch').addEventListener('change', filterByQuestion);
             document.getElementById('resetQuestionSearchBtn').addEventListener('click', resetQuestionSearch);
         };
     </script>
