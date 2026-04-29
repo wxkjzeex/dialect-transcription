@@ -648,14 +648,15 @@
                     </div>
                     
                     <div class="form-group">
-                        <label>📋 Вопрос ЛАРНГ (код)</label>
-                        <input type="text" id="newQuestionCode" placeholder="например: L 205">
+                        <label>📋 Вопрос ЛАРНГ</label>
+                        <select id="newQuestionSelect">
+                            <option value="">Выберите вопрос из списка...</option>
+                        </select>
                     </div>
                     
-                    <div class="form-group">
-                        <label>❓ Текст вопроса</label>
-                        <input type="text" id="newQuestionText" placeholder="например: Глагол 'пахать'">
-                    </div>
+                    <!-- Скрытые поля -->
+                    <input type="hidden" id="newQuestionCode">
+                    <input type="hidden" id="newQuestionText">
                     
                     <div class="form-row">
                         <div class="form-group">
@@ -1397,14 +1398,45 @@
                 return null;
             }
         }
+
+                // ==================== СПРАВОЧНИК ВОПРОСОВ ЛАРНГ ====================
         
-        // Добавление нового населенного пункта
+        const LARNG_QUESTIONS = [
+            { code: "L 205", text: "Глагол 'пахать' (землю, огород)" },
+            { code: "L 312", text: "Название петуха" },
+            { code: "L 504", text: "Название пояса, кушака" }
+        ];
+
+        // Заполнение выпадающего списка вопросов
+        function populateQuestionSelect() {
+            const select = document.getElementById('newQuestionSelect');
+            if (!select) return;
+            
+            let html = '<option value="">Выберите вопрос из списка...</option>';
+            
+            LARNG_QUESTIONS.forEach(q => {
+                html += `<option value="${q.code}|${q.text}">${q.code} — ${q.text}</option>`;
+            });
+            
+            select.innerHTML = html;
+            
+            // Обработчик выбора вопроса
+            select.addEventListener('change', function() {
+                const value = this.value;
+                if (value) {
+                    const [code, text] = value.split('|');
+                    document.getElementById('newQuestionCode').value = code;
+                    document.getElementById('newQuestionText').value = text;
+                }
+            });
+        }
+        
+         // Обновлённая функция добавления пункта
         window.addNewSettlement = async function() {
             const name = document.getElementById('newSettlementName').value.trim();
             const region = document.getElementById('newSettlementRegion').value;
             const district = document.getElementById('newSettlementDistrict').value;
-            const questionCode = document.getElementById('newQuestionCode').value.trim();
-            const questionText = document.getElementById('newQuestionText').value.trim();
+            const questionSelect = document.getElementById('newQuestionSelect').value;
             const lingUnit1 = document.getElementById('newLingUnit1').value.trim();
             const lingUnit2 = document.getElementById('newLingUnit2').value.trim();
             
@@ -1414,10 +1446,17 @@
                 return;
             }
             
-            if (!questionCode || !questionText || !lingUnit1) {
-                alert('Заполните код вопроса, текст вопроса и основную лексему');
+            if (!questionSelect) {
+                alert('Выберите вопрос ЛАРНГ из списка');
                 return;
             }
+            
+            if (!lingUnit1) {
+                alert('Введите основную лексему');
+                return;
+            }
+            
+            const [questionCode, questionText] = questionSelect.split('|');
             
             const statusEl = document.getElementById('geocodeStatus');
             const btn = document.getElementById('addSettlementBtn');
@@ -1469,43 +1508,101 @@
             
             dialectData.push(newRecord);
             
-            // Отправляем в Google Таблицу
-            statusEl.textContent = '📤 Отправка в Google Таблицу...';
+            // Попытка отправить в Google Sheets
+            statusEl.textContent = '📤 Сохранение данных...';
             
             const success = await sendToGoogleSheet(newRecord);
             
+            // Сохраняем локально в любом случае
+            saveToLocalData(newRecord);
+            
             if (success) {
                 statusEl.textContent = '✅ Пункт успешно добавлен и сохранен в таблице!';
-                statusEl.className = 'geocode-status success';
-                
-                // Очищаем форму
-                document.getElementById('newSettlementName').value = '';
-                document.getElementById('newSettlementRegion').value = '';
-                document.getElementById('newSettlementDistrict').innerHTML = '<option value="">Выберите район</option>';
-                document.getElementById('newQuestionCode').value = '';
-                document.getElementById('newQuestionText').value = '';
-                document.getElementById('newLingUnit1').value = '';
-                document.getElementById('newLingUnit2').value = '';
-                
-                // Обновляем фильтры и карту
-                initDistrictFilters();
-                renderMarkers();
-                
-                // Сворачиваем форму
-                setTimeout(() => {
-                    document.getElementById('addSettlementForm').style.display = 'none';
-                    document.getElementById('toggleFormBtn').textContent = '▼ Показать форму добавления';
-                }, 1500);
             } else {
-                statusEl.textContent = '⚠️ Пункт добавлен локально, но не сохранен в таблице (требуется настройка Apps Script)';
-                statusEl.className = 'geocode-status error';
-                
-                // Все равно обновляем карту
-                initDistrictFilters();
-                renderMarkers();
+                statusEl.textContent = '✅ Пункт добавлен локально (данные сохранены в браузере)';
             }
+            statusEl.className = 'geocode-status success';
+            
+            // Очищаем форму
+            document.getElementById('newSettlementName').value = '';
+            document.getElementById('newSettlementRegion').value = '';
+            document.getElementById('newSettlementDistrict').innerHTML = '<option value="">Выберите район</option>';
+            document.getElementById('newQuestionSelect').value = '';
+            document.getElementById('newLingUnit1').value = '';
+            document.getElementById('newLingUnit2').value = '';
+            
+            // Обновляем фильтры и карту
+            initDistrictFilters();
+            renderMarkers();
+            
+            // Сворачиваем форму
+            setTimeout(() => {
+                document.getElementById('addSettlementForm').style.display = 'none';
+                document.getElementById('toggleFormBtn').textContent = '▼ Показать форму добавления';
+            }, 2000);
             
             btn.disabled = false;
+        };
+        
+        // Локальное сохранение данных
+        function saveToLocalData(record) {
+            const key = 'dialectUserAdditions';
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.push({
+                ...record,
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem(key, JSON.stringify(existing));
+        }
+        
+        // Загрузка локальных данных при старте
+        function loadLocalData() {
+            const key = 'dialectUserAdditions';
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                const userRecords = JSON.parse(saved);
+                console.log(`Загружено ${userRecords.length} локальных записей`);
+                
+                // Добавляем settlements из сохраненных данных
+                userRecords.forEach(rec => {
+                    // Проверяем, нет ли уже такого пункта
+                    if (!settlements.find(s => s.name === rec.settlement)) {
+                        // Не добавляем дубликаты без координат
+                    }
+                    // Добавляем запись в dialectData, если её ещё нет
+                    if (!dialectData.find(d => 
+                        d.settlement === rec.settlement && 
+                        d.question_code === rec.question_code &&
+                        d.ling_unit_1 === rec.ling_unit_1
+                    )) {
+                        dialectData.push(rec);
+                    }
+                });
+            }
+        }
+        
+        // Экспорт локальных данных
+        window.exportLocalData = function() {
+            const key = 'dialectUserAdditions';
+            const data = JSON.parse(localStorage.getItem(key) || '[]');
+            
+            if (data.length === 0) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+            
+            // CSV
+            const headers = ['region', 'district', 'settlement', 'question_code', 'question_text', 'ling_unit_1', 'ling_unit_2', 'timestamp'];
+            const csv = [
+                headers.join(','),
+                ...data.map(row => headers.map(h => `"${row[h] || ''}"`).join(','))
+            ].join('\n');
+            
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `dialect_data_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
         };
         
         // Отправка данных в Google Таблицу через Google Apps Script
