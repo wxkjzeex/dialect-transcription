@@ -10,10 +10,11 @@ import xml.etree.ElementTree as ET
 app = Flask(__name__)
 CORS(app)
 
-# Хранилище сессий
+# ==================== СЕССИИ ====================
 sessions = {}
 
-# Правила для фонетической транскрипции
+# ==================== ФОНЕТИКА ====================
+
 LETTER_TO_PHONEME = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
     'е': 'je', 'ё': 'jo', 'ж': 'ʐ', 'з': 'z', 'и': 'i',
@@ -25,139 +26,69 @@ LETTER_TO_PHONEME = {
 }
 
 def text_to_phonetic(text):
-    """Преобразование в фонетическую транскрипцию"""
     if not text:
         return ""
-    
+
     text = text.lower().strip()
-    phonetic = []
-    
-    i = 0
-    while i < len(text):
-        char = text[i]
-        if i < len(text) - 1:
-            two = text[i:i+2]
-            if two == 'тс':
-                phonetic.append('ts')
-                i += 2
-                continue
-            elif two == 'дж':
-                phonetic.append('dʐ')
-                i += 2
-                continue
-        
-        if char in LETTER_TO_PHONEME:
-            phoneme = LETTER_TO_PHONEME[char]
-            if phoneme:
-                phonetic.append(phoneme)
-        elif char == ' ':
-            phonetic.append(' ')
-        else:
-            phonetic.append(char)
-        i += 1
-    
-    result = ''.join(phonetic)
-    words = result.split()
-    voiced = {'b': 'p', 'v': 'f', 'g': 'k', 'd': 't', 'ʐ': 'ʂ', 'z': 's'}
-    
-    processed = []
-    for word in words:
-        if word and word[-1] in voiced:
-            word = word[:-1] + voiced[word[-1]]
-        processed.append(word)
-    
-    return ' '.join(processed)
+    result = []
 
-    # Правила для кириллической фонетической транскрипции
-LETTER_TO_CYRILLIC_PHONEME = {
-    'а': 'а', 'б': 'б', 'в': 'в', 'г': 'г', 'д': 'д',
-    'е': 'йэ', 'ё': 'йо', 'ж': 'ж', 'з': 'з', 'и': 'и',
-    'й': 'й', 'к': 'к', 'л': 'л', 'м': 'м', 'н': 'н',
-    'о': 'о', 'п': 'п', 'р': 'р', 'с': 'с', 'т': 'т',
-    'у': 'у', 'ф': 'ф', 'х': 'х', 'ц': 'ц', 'ч': 'ч',
-    'ш': 'ш', 'щ': 'щ', 'ъ': '', 'ы': 'ы', 'ь': "'",
-    'э': 'э', 'ю': 'йу', 'я': 'йа'
-}
-
-# Правила редукции гласных для кириллической транскрипции
-VOWEL_REDUCTION_CYRILLIC = {
-    'о': 'а',  # аканье
-    'е': 'и',  # иканье
-    'я': 'и'   # иканье
-}
-
-def text_to_cyrillic_phonetic(text):
-    """Преобразование в кириллическую фонетическую транскрипцию"""
-    if not text:
-        return ""
-    
-    text = text.lower().strip()
-    phonetic = []
-    words = text.split()
-    
-    for word in words:
-        word_phonetic = []
+    for word in text.split():
+        phon = []
         i = 0
-        
-        # Определяем ударную гласную (упрощённо - первая "о" или "е")
-        stressed_pos = -1
-        for j, ch in enumerate(word):
-            if ch in 'оея':
-                stressed_pos = j
-                break
-        
         while i < len(word):
-            char = word[i]
-            
-            # Обработка двухбуквенных сочетаний
             if i < len(word) - 1:
                 two = word[i:i+2]
                 if two == 'тс':
-                    word_phonetic.append('ц')
+                    phon.append('ts')
                     i += 2
                     continue
-                elif two == 'дж':
-                    word_phonetic.append('дж')
+                if two == 'дж':
+                    phon.append('dʐ')
                     i += 2
                     continue
-            
-            if char in LETTER_TO_CYRILLIC_PHONEME:
-                phoneme = LETTER_TO_CYRILLIC_PHONEME[char]
-                
-                # Применяем редукцию для безударных гласных
-                if char in VOWEL_REDUCTION_CYRILLIC and i != stressed_pos:
-                    # Проверяем предударную позицию
-                    if i == stressed_pos - 1:
-                        # Первый предударный - редуцируется
-                        phoneme = VOWEL_REDUCTION_CYRILLIC[char]
-                    elif i < stressed_pos - 1 or i > stressed_pos:
-                        # Другие безударные - сильная редукция
-                        if char == 'о':
-                            phoneme = 'ъ'
-                        elif char in 'ея':
-                            phoneme = 'ь'
-                
-                if phoneme:
-                    word_phonetic.append(phoneme)
-            elif char == ' ':
-                word_phonetic.append(' ')
-            else:
-                word_phonetic.append(char)
+
+            char = word[i]
+            phoneme = LETTER_TO_PHONEME.get(char, char)
+            if phoneme:
+                phon.append(phoneme)
             i += 1
-        
-        # Оглушение конечных согласных
-        if word_phonetic:
-            voiced = {'б': 'п', 'в': 'ф', 'г': 'к', 'д': 'т', 'ж': 'ш', 'з': 'с'}
-            last_char = word_phonetic[-1]
-            if last_char in voiced:
-                word_phonetic[-1] = voiced[last_char]
-        
-        phonetic.append(''.join(word_phonetic))
-    
-    return ' '.join(phonetic)
+
+        # оглушение
+        voiced = {'b': 'p', 'v': 'f', 'g': 'k', 'd': 't', 'ʐ': 'ʂ', 'z': 's'}
+        if phon and phon[-1] in voiced:
+            phon[-1] = voiced[phon[-1]]
+
+        result.append(''.join(phon))
+
+    return ' '.join(result)
 
 
-# ==================== МАРШРУТЫ ====================
+# ==================== TEI ПАРСИНГ ====================
+
+def parse_tei(xml_file):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    words = []
+
+    # ✅ ВАЖНО: идём по документу в правильном порядке
+    for el in root.iter():
+        tag = el.tag.split('}')[-1]
+
+        if tag in ['w', 'pc']:
+            text = ''.join(el.itertext()).strip()
+            if text:
+                words.append(text)
+
+    full_text = ' '.join(words)
+
+    return {
+        'words': words,
+        'fullText': full_text
+    }
+
+
+# ==================== ROUTES ====================
 
 @app.route('/')
 def index():
@@ -172,83 +103,37 @@ def corpus_page():
     return render_template('corpus.html')
 
 
-# ==================== КОРПУС: ЗАГРУЗКА И ПАРСИНГ ====================
+# ==================== UPLOAD ====================
 
 @app.route('/upload_corpus', methods=['POST'])
 def upload_corpus():
     if 'files' not in request.files:
         return jsonify({'error': 'Нет файлов'}), 400
-    
+
     files = request.files.getlist('files')
-    parsed_manuscripts = []
-    
+    result = []
+
     for file in files:
-        if file.filename.endswith('.xml'):
-            try:
-                tree = ET.parse(file)
-                root = tree.getroot()
-                
-                # Извлекаем ВЕСЬ текст из тегов <w> и <pc>
-                all_text = []
-                
-                # Собираем текст из <w>
-                for w in root.findall('.//{http://www.tei-c.org/ns/1.0}w'):
-                    text = ''.join(w.itertext()).strip()
-                    if text:
-                        all_text.append(text)
-                
-                # Если с namespace не нашлось, пробуем без
-                if not all_text:
-                    for w in root.findall('.//w'):
-                        text = ''.join(w.itertext()).strip()
-                        if text:
-                            all_text.append(text)
-                
-                # Собираем знаки препинания из <pc>
-                for pc in root.findall('.//{http://www.tei-c.org/ns/1.0}pc'):
-                    text = pc.text.strip() if pc.text else ''
-                    if text:
-                        all_text.append(text)
-                
-                if not all_text:
-                    for pc in root.findall('.//pc'):
-                        text = pc.text.strip() if pc.text else ''
-                        if text:
-                            all_text.append(text)
-                
-                # Объединяем в сплошной текст
-                full_text = ' '.join(all_text)
-                
-                # Разбиваем на стихи по ключевым словам (упрощённо)
-                # Ищем маркеры начала стихов
-                verses = {}
-                verse_markers = ['Рече', 'рече', 'г҃ь', 'господь', 'оч҃е', 'сн҃ъ', 'братъ']
-                
-                # Упрощённое разбиение: делим текст на 22 части (ст. 11-32)
-                words = full_text.split()
-                chunk_size = len(words) // 22
-                
-                for i in range(22):
-                    verse_num = str(i + 11)
-                    start = i * chunk_size
-                    end = (i + 1) * chunk_size if i < 21 else len(words)
-                    verse_text = ' '.join(words[start:end])
-                    if verse_text:
-                        verses[verse_num] = verse_text[:500] + '...' if len(verse_text) > 500 else verse_text
-                
-                parsed_manuscripts.append({
-                    'name': file.filename,
-                    'verses': verses,
-                    'verse_count': len(verses)
-                })
-                
-            except Exception as e:
-                return jsonify({'error': f'Ошибка парсинга {file.filename}: {str(e)}'}), 400
-    
-    return jsonify({'manuscripts': parsed_manuscripts})
+        if not file.filename.endswith('.xml'):
+            continue
+
+        try:
+            data = parse_tei(file)
+
+            result.append({
+                'name': file.filename,
+                'words': data['words'],
+                'fullText': data['fullText'],
+                'word_count': len(data['words'])
+            })
+
+        except Exception as e:
+            return jsonify({'error': f'Ошибка в {file.filename}: {str(e)}'}), 400
+
+    return jsonify({'manuscripts': result})
 
 
-# ==================== КОРПУС: СОХРАНЕНИЕ И ЗАГРУЗКА СЕССИЙ ====================
+# ==================== СЕССИИ ====================
 
 @app.route('/save_session', methods=['POST'])
 def save_session():
@@ -257,7 +142,8 @@ def save_session():
     sessions[session_id] = data
     return jsonify({'session_id': session_id})
 
-@app.route('/load_session/<session_id>', methods=['GET'])
+
+@app.route('/load_session/<session_id>')
 def load_session(session_id):
     if session_id in sessions:
         return jsonify(sessions[session_id])
@@ -270,55 +156,34 @@ def load_session(session_id):
 def transcribe():
     if 'audio' not in request.files:
         return jsonify({'error': 'Нет файла'}), 400
-    
+
     file = request.files['audio']
-    if file.filename == '':
-        return jsonify({'error': 'Файл не выбран'}), 400
-    
+
     try:
-        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'wav'
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp:
             file.save(tmp.name)
-            tmp_path = tmp.name
-        
-        wav_path = tmp_path
-        if ext != 'wav':
-            wav_path = tempfile.mktemp(suffix='.wav')
-            result = subprocess.run([
-                'ffmpeg', '-i', tmp_path,
-                '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
-                '-y', wav_path
-            ], capture_output=True, timeout=30)
-            os.unlink(tmp_path)
-            
-            if result.returncode != 0:
-                raise Exception(f"Ошибка конвертации аудио")
-        
+            wav_path = tmp.name
+
         recognizer = sr.Recognizer()
+
         with sr.AudioFile(wav_path) as source:
             audio = recognizer.record(source)
-        
-        text = recognizer.recognize_google(audio, language='ru-RU')
-        phonetic_ipa = text_to_phonetic(text)
-        phonetic_cyrillic = text_to_cyrillic_phonetic(text)
-        
-        os.unlink(wav_path)
-        
-        return jsonify({
-            'orthographic': text,
-            'phonetic_ipa': phonetic_ipa,
-            'phonetic_cyrillic': phonetic_cyrillic
-        })
-    
-    except sr.UnknownValueError:
-        return jsonify({'error': 'Речь не распознана. Попробуйте другой файл.'}), 400
-    except sr.RequestError as e:
-        return jsonify({'error': f'Ошибка сервиса распознавания: {e}'}), 500
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Превышено время обработки аудио'}), 500
-    except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
+        text = recognizer.recognize_google(audio, language='ru-RU')
+        phonetic = text_to_phonetic(text)
+
+        os.unlink(wav_path)
+
+        return jsonify({
+            'text': text,
+            'phonetic': phonetic
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== RUN ====================
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=5000, debug=True)
