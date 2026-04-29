@@ -544,39 +544,47 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-       function alignMultiple(mainWords, otherWordsArray) {
-            let alignedMain = mainWords.slice();
+      function alignMultiple(mainWords, otherWordsArray) {
+        
+            let finalMain = null;
             let allAlignments = [];
         
-            otherWordsArray.forEach(otherWords => {
+            otherWordsArray.forEach((otherWords, idx) => {
         
-                const [newMain, newOther] = needlemanWunsch(alignedMain, otherWords);
+                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
         
-                // обновляем главный список (с gap'ами)
-                alignedMain = newMain;
+                if (idx === 0) {
+                    // первый проход — фиксируем шаблон
+                    finalMain = alignedMain;
+                    allAlignments.push(alignedOther);
+                } else {
+                    // подгоняем к уже зафиксированному main
+                    const [newMain, newOther] = needlemanWunsch(finalMain, alignedOther);
         
-                // обновляем уже выровненные списки
-                allAlignments = allAlignments.map(prev => {
-                    const updated = [];
-                    let j = 0;
+                    // обновляем все предыдущие выравнивания
+                    allAlignments = allAlignments.map(prev => {
+                        const updated = [];
+                        let j = 0;
         
-                    for (let i = 0; i < newMain.length; i++) {
-                        if (newMain[i] === '—') {
-                            updated.push('—');
-                        } else {
-                            updated.push(prev[j] || '—');
-                            j++;
+                        for (let i = 0; i < newMain.length; i++) {
+                            if (newMain[i] === '—') {
+                                updated.push('—');
+                            } else {
+                                updated.push(prev[j] || '—');
+                                j++;
+                            }
                         }
-                    }
         
-                    return updated;
-                });
+                        return updated;
+                    });
         
-                allAlignments.push(newOther);
+                    finalMain = newMain;
+                    allAlignments.push(newOther);
+                }
             });
         
             return {
-                mainWords: alignedMain,
+                mainWords: finalMain,
                 alignments: allAlignments.map(arr =>
                     arr.map(word => ({ other: word }))
                 )
@@ -624,9 +632,9 @@
 
         // ==================== УМНАЯ МЕТРИКА ====================
         function similarity(a, b) {
-            const MATCH = 5;      // было 3
-            const PARTIAL = 2;    // было 1
-            const MISMATCH = -3;  // было -2
+            const MATCH = 6;
+            const PARTIAL = 2;
+            const MISMATCH = -4;
         
             const na = normalize(a);
             const nb = normalize(b);
@@ -655,7 +663,7 @@
 
         // ==================== NEEDLEMAN-WUNSCH ====================
         function needlemanWunsch(seq1, seq2) {
-            const GAP = -5;
+            const GAP = -6;
         
             const n = seq1.length;
             const m = seq2.length;
