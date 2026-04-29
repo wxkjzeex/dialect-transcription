@@ -546,154 +546,148 @@
         
         // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
         
-                 // Множественное выравнивание всех списков одновременно
-        function alignWords(mainWords, otherWordsArray) {
-            // Собираем все списки в один массив для совместного выравнивания
-            const allLists = [mainWords, ...otherWordsArray];
-            const numLists = allLists.length;
-            
-            // Нормализация слова для сравнения
-            function normalizeForCompare(word) {
-                if (!word || word === '—') return word;
-                let normalized = word.toLowerCase()
+         function alignWords(mainWords, otherWordsArray) {
+            // ==================== НАСТРОЙКИ ====================
+            const MATCH_SCORE = 2;
+            const PARTIAL_MATCH = 1;
+            const MISMATCH = -1;
+            const GAP = -2;
+        
+            // ==================== НОРМАЛИЗАЦИЯ ====================
+            function normalize(word) {
+                if (!word || word === '—') return '';
+                return word.toLowerCase()
                     .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, '')
-                    .replace(/[҃҄҅҆]/g, '');
-                
-                const replacements = [
-                    ['ѣ', 'е'], ['ѵ', 'и'], ['ꙁ', 'з'], ['ꙋ', 'у'], ['ѡ', 'о'],
-                    ['ꙗ', 'я'], ['ѧ', 'я'], ['і', 'и'], ['ї', 'и'], ['ѳ', 'ф'],
-                    ['ѯ', 'кс'], ['ѱ', 'пс'], ['ѕ', 'з'], ['ꙑ', 'ы'], ['ꙓ', 'е'],
-                    ['оу', 'у'], ['ѹ', 'у'], ['ꙩ', 'о'], ['щ', 'шч'],
-                    ['ю', 'у'], ['ѭ', 'у'], ['ѥ', 'е'], ['ꙏ', 'о'], ['ꙟ', 'о']
-                ];
-                for (let [old, newChar] of replacements) {
-                    normalized = normalized.split(old).join(newChar);
-                }
-                normalized = normalized.replace(/[ъь]$/, '');
-                return normalized;
+                    .replace(/[҃҄҅҆]/g, '')
+                    .replace(/[ъь]$/, '')
+                    .replace(/[ѣ]/g, 'е')
+                    .replace(/[іѵї]/g, 'и')
+                    .replace(/[ѡꙩ]/g, 'о')
+                    .replace(/[ѧꙗ]/g, 'я')
+                    .replace(/[ѳ]/g, 'ф')
+                    .replace(/[ꙋѹоу]/g, 'у');
             }
-            
-            // Проверяем, что все слова в позиции эквивалентны (разные списки)
-            function allEquivalent(words) {
-                const norms = words.map(w => normalizeForCompare(w));
-                // Если хотя бы два слова совпадают, считаем позицию общей
-                for (let i = 0; i < norms.length; i++) {
-                    for (let j = i + 1; j < norms.length; j++) {
-                        if (norms[i] === norms[j]) return true;
-                    }
+        
+            function similarity(a, b) {
+                const na = normalize(a);
+                const nb = normalize(b);
+        
+                if (!na && !nb) return 0;
+                if (na === nb) return MATCH_SCORE;
+        
+                // частичное совпадение (общий префикс)
+                let prefix = 0;
+                for (let i = 0; i < Math.min(na.length, nb.length); i++) {
+                    if (na[i] === nb[i]) prefix++;
+                    else break;
                 }
-                // Проверяем общий корень (первые 3 буквы)
-                const firstNorm = norms[0];
-                if (firstNorm.length >= 3) {
-                    const prefix = firstNorm.substring(0, 3);
-                    if (norms.every(n => n.length >= 3 && n.substring(0, 3) === prefix)) {
-                        return true;
-                    }
+        
+                if (prefix >= Math.min(3, Math.floor(Math.min(na.length, nb.length) * 0.6))) {
+                    return PARTIAL_MATCH;
                 }
-                return false;
+        
+                return MISMATCH;
             }
-            
-            // Жадный алгоритм множественного выравнивания
-            const result = [];
-            const pointers = new Array(numLists).fill(0);
-            const lengths = allLists.map(list => list.length);
-            
-            while (pointers.some((p, i) => p < lengths[i])) {
-                const row = [];
-                let bestAdvance = null;
-                let bestScore = -Infinity;
-                
-                // Перебираем возможные варианты продвижения
-                // Вариант 1: все продвигаются на 1 (если у всех есть слова)
-                if (pointers.every((p, i) => p < lengths[i])) {
-                    const words = pointers.map((p, i) => allLists[i][p]);
-                    if (allEquivalent(words)) {
-                        bestAdvance = new Array(numLists).fill(1);
-                        bestScore = 1;
+        
+            // ==================== PAIRWISE ALIGNMENT ====================
+            function needlemanWunsch(seq1, seq2) {
+                const n = seq1.length;
+                const m = seq2.length;
+        
+                const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+                const trace = Array.from({ length: n + 1 }, () => Array(m + 1).fill(null));
+        
+                // инициализация
+                for (let i = 1; i <= n; i++) {
+                    dp[i][0] = i * GAP;
+                    trace[i][0] = 'up';
+                }
+                for (let j = 1; j <= m; j++) {
+                    dp[0][j] = j * GAP;
+                    trace[0][j] = 'left';
+                }
+        
+                // заполнение
+                for (let i = 1; i <= n; i++) {
+                    for (let j = 1; j <= m; j++) {
+                        const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
+                        const del = dp[i - 1][j] + GAP;
+                        const ins = dp[i][j - 1] + GAP;
+        
+                        const max = Math.max(match, del, ins);
+                        dp[i][j] = max;
+        
+                        if (max === match) trace[i][j] = 'diag';
+                        else if (max === del) trace[i][j] = 'up';
+                        else trace[i][j] = 'left';
                     }
                 }
-                
-                // Вариант 2: некоторые продвигаются, некоторые — пропуск
-                if (bestScore < 0) {
-                    for (let mask = 0; mask < (1 << numLists); mask++) {
-                        if (mask === 0) continue;
-                        
-                        const advances = [];
-                        let valid = true;
-                        for (let i = 0; i < numLists; i++) {
-                            if (mask & (1 << i)) {
-                                if (pointers[i] >= lengths[i]) {
-                                    valid = false;
-                                    break;
-                                }
-                                advances.push(1);
-                            } else {
-                                advances.push(0);
-                            }
-                        }
-                        if (!valid || advances.every(a => a === 0)) continue;
-                        
-                        // Собираем слова только из продвинутых списков
-                        const words = pointers.map((p, i) => 
-                            advances[i] ? allLists[i][p] : null
-                        );
-                        const activeWords = words.filter(w => w !== null);
-                        
-                        if (activeWords.length >= 2 && allEquivalent(activeWords)) {
-                            bestAdvance = advances;
-                            bestScore = activeWords.length;
-                            break;
-                        }
-                    }
-                }
-                
-                // Если не нашли хорошего варианта — продвигаем все по одному
-                if (!bestAdvance) {
-                    bestAdvance = [];
-                    for (let i = 0; i < numLists; i++) {
-                        bestAdvance.push(pointers[i] < lengths[i] ? 1 : 0);
-                    }
-                }
-                
-                // Формируем строку
-                for (let i = 0; i < numLists; i++) {
-                    if (bestAdvance[i] && pointers[i] < lengths[i]) {
-                        row.push(allLists[i][pointers[i]]);
-                        pointers[i]++;
+        
+                // восстановление
+                let i = n, j = m;
+                const aligned1 = [];
+                const aligned2 = [];
+        
+                while (i > 0 || j > 0) {
+                    if (i > 0 && j > 0 && trace[i][j] === 'diag') {
+                        aligned1.unshift(seq1[i - 1]);
+                        aligned2.unshift(seq2[j - 1]);
+                        i--; j--;
+                    } else if (i > 0 && trace[i][j] === 'up') {
+                        aligned1.unshift(seq1[i - 1]);
+                        aligned2.unshift('—');
+                        i--;
                     } else {
-                        row.push('—');
+                        aligned1.unshift('—');
+                        aligned2.unshift(seq2[j - 1]);
+                        j--;
                     }
                 }
-                
-                result.push(row);
-                
-                // Защита от бесконечного цикла
-                if (result.length > 10000) break;
+        
+                return [aligned1, aligned2];
             }
-            
-            // Преобразуем в формат alignments для renderWordAlignmentTable
-            const alignments = [];
-            for (let listIdx = 0; listIdx < otherWordsArray.length; listIdx++) {
-                const alignment = [];
-                for (let rowIdx = 0; rowIdx < result.length; rowIdx++) {
-                    alignment.push({
-                        main: rowIdx < result.length ? result[rowIdx][0] : '—',
-                        other: result[rowIdx][listIdx + 1] || '—',
-                        type: 'match'
-                    });
-                }
-                alignments.push(alignment);
-            }
-            
-            // Обновляем mainWords (могли добавиться вставки)
-            const newMainWords = result.map(row => row[0]);
-            
-            // Обновляем alignedData.mainWords
-            if (alignedData) {
-                alignedData.mainWords = newMainWords;
-            }
-            
-            return { alignments, newMainWords };
+        
+            // ==================== PROGRESSIVE ALIGNMENT ====================
+            let alignedMain = [...mainWords];
+            let alignedOthers = [];
+        
+            otherWordsArray.forEach((otherWords, idx) => {
+                const [newMain, newOther] = needlemanWunsch(alignedMain, otherWords);
+        
+                // обновляем уже выровненные списки (вставляем gap’ы)
+                alignedOthers = alignedOthers.map(existing => {
+                    const updated = [];
+                    let ptr = 0;
+        
+                    for (let i = 0; i < newMain.length; i++) {
+                        if (newMain[i] === '—') {
+                            updated.push('—');
+                        } else {
+                            updated.push(existing[ptr]);
+                            ptr++;
+                        }
+                    }
+        
+                    return updated;
+                });
+        
+                alignedMain = newMain;
+                alignedOthers.push(newOther);
+            });
+        
+            // ==================== ФОРМИРОВАНИЕ РЕЗУЛЬТАТА ====================
+            const alignments = alignedOthers.map(otherList => {
+                return alignedMain.map((word, i) => ({
+                    main: word,
+                    other: otherList[i] || '—',
+                    type: 'match'
+                }));
+            });
+        
+            return {
+                alignments,
+                newMainWords: alignedMain
+            };
         }
 
                 // ==================== КОНСТАНТЫ ДЛЯ ОПРЕДЕЛЕНИЯ РАЗНОЧТЕНИЙ ====================
