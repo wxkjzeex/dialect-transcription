@@ -546,12 +546,13 @@
         
         // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
         
-                // Алгоритм выравнивания с учетом контекстных окон
-        function alignWords(mainWords, otherWords) {
-            const m = mainWords.length;
-            const n = otherWords.length;
+                 // Множественное выравнивание всех списков одновременно
+        function alignWords(mainWords, otherWordsArray) {
+            // Собираем все списки в один массив для совместного выравнивания
+            const allLists = [mainWords, ...otherWordsArray];
+            const numLists = allLists.length;
             
-            // Нормализация для сравнения
+            // Нормализация слова для сравнения
             function normalizeForCompare(word) {
                 if (!word || word === '—') return word;
                 let normalized = word.toLowerCase()
@@ -563,7 +564,7 @@
                     ['ꙗ', 'я'], ['ѧ', 'я'], ['і', 'и'], ['ї', 'и'], ['ѳ', 'ф'],
                     ['ѯ', 'кс'], ['ѱ', 'пс'], ['ѕ', 'з'], ['ꙑ', 'ы'], ['ꙓ', 'е'],
                     ['оу', 'у'], ['ѹ', 'у'], ['ꙩ', 'о'], ['щ', 'шч'],
-                    ['ю', 'у'], ['ѭ', 'у'], ['ѥ', 'е']
+                    ['ю', 'у'], ['ѭ', 'у'], ['ѥ', 'е'], ['ꙏ', 'о'], ['ꙟ', 'о']
                 ];
                 for (let [old, newChar] of replacements) {
                     normalized = normalized.split(old).join(newChar);
@@ -572,159 +573,127 @@
                 return normalized;
             }
             
-            // Функция контекстной близости (учитывает соседей)
-            function contextScore(i, j, radius) {
-                let score = 0;
-                for (let r = 1; r <= radius; r++) {
-                    // Проверяем контекст слева
-                    if (i - r >= 0 && j - r >= 0) {
-                        if (normalizeForCompare(mainWords[i - r]) === normalizeForCompare(otherWords[j - r])) {
-                            score += 1.0 / r;
-                        }
+            // Проверяем, что все слова в позиции эквивалентны (разные списки)
+            function allEquivalent(words) {
+                const norms = words.map(w => normalizeForCompare(w));
+                // Если хотя бы два слова совпадают, считаем позицию общей
+                for (let i = 0; i < norms.length; i++) {
+                    for (let j = i + 1; j < norms.length; j++) {
+                        if (norms[i] === norms[j]) return true;
                     }
-                    // Проверяем контекст справа
-                    if (i + r <= m && j + r <= n) {
-                        if (normalizeForCompare(mainWords[i + r - 2]) === normalizeForCompare(otherWords[j + r - 2])) {
-                            score += 1.0 / r;
+                }
+                // Проверяем общий корень (первые 3 буквы)
+                const firstNorm = norms[0];
+                if (firstNorm.length >= 3) {
+                    const prefix = firstNorm.substring(0, 3);
+                    if (norms.every(n => n.length >= 3 && n.substring(0, 3) === prefix)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            // Жадный алгоритм множественного выравнивания
+            const result = [];
+            const pointers = new Array(numLists).fill(0);
+            const lengths = allLists.map(list => list.length);
+            
+            while (pointers.some((p, i) => p < lengths[i])) {
+                const row = [];
+                let bestAdvance = null;
+                let bestScore = -Infinity;
+                
+                // Перебираем возможные варианты продвижения
+                // Вариант 1: все продвигаются на 1 (если у всех есть слова)
+                if (pointers.every((p, i) => p < lengths[i])) {
+                    const words = pointers.map((p, i) => allLists[i][p]);
+                    if (allEquivalent(words)) {
+                        bestAdvance = new Array(numLists).fill(1);
+                        bestScore = 1;
+                    }
+                }
+                
+                // Вариант 2: некоторые продвигаются, некоторые — пропуск
+                if (bestScore < 0) {
+                    for (let mask = 0; mask < (1 << numLists); mask++) {
+                        if (mask === 0) continue;
+                        
+                        const advances = [];
+                        let valid = true;
+                        for (let i = 0; i < numLists; i++) {
+                            if (mask & (1 << i)) {
+                                if (pointers[i] >= lengths[i]) {
+                                    valid = false;
+                                    break;
+                                }
+                                advances.push(1);
+                            } else {
+                                advances.push(0);
+                            }
+                        }
+                        if (!valid || advances.every(a => a === 0)) continue;
+                        
+                        // Собираем слова только из продвинутых списков
+                        const words = pointers.map((p, i) => 
+                            advances[i] ? allLists[i][p] : null
+                        );
+                        const activeWords = words.filter(w => w !== null);
+                        
+                        if (activeWords.length >= 2 && allEquivalent(activeWords)) {
+                            bestAdvance = advances;
+                            bestScore = activeWords.length;
+                            break;
                         }
                     }
                 }
-                return score;
-            }
-            
-            // Список «стоп-слов» — коротких служебных, которые не должны быть якорями
-            const stopWords = new Set(['и', 'же', 'бо', 'на', 'въ', 'съ', 'не', 'да', 'ꙗко', 'отъ', 
-                                      'а', 'нъ', 'ли', 'о', 'по', 'прѣдъ', 'оу', 'ѣ', 'се', 'сь',
-                                      'вьсь', 'тъ', 'сѧ', 'ми', 'ти', 'мѧ', 'тѧ', 'ѥго', 'ѥмоу']);
-            
-            // Проверка — можно ли использовать слово как якорь
-            function isAnchorWord(word) {
-                if (!word) return false;
-                const norm = normalizeForCompare(word);
-                return norm.length >= 4 && !stopWords.has(norm);
-            }
-            
-            // Создаем матрицу с контекстными весами
-            const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(Infinity));
-            const track = Array(m + 1).fill().map(() => Array(n + 1).fill(null));
-            
-            dp[0][0] = 0;
-            
-            for (let i = 0; i <= m; i++) {
-                for (let j = 0; j <= n; j++) {
-                    if (i === 0 && j === 0) continue;
-                    
-                    // Удаление (из главного)
-                    if (i > 0) {
-                        const delCost = mainWords[i-1] === '—' ? 0.5 : 1;
-                        const cost = dp[i-1][j] + delCost;
-                        if (cost < dp[i][j]) {
-                            dp[i][j] = cost;
-                            track[i][j] = 'up';
-                        }
-                    }
-                    
-                    // Вставка (в другой)
-                    if (j > 0) {
-                        const insCost = otherWords[j-1] === '—' ? 0.5 : 1;
-                        const cost = dp[i][j-1] + insCost;
-                        if (cost < dp[i][j]) {
-                            dp[i][j] = cost;
-                            track[i][j] = 'left';
-                        }
-                    }
-                    
-                    // Замена/совпадение
-                    if (i > 0 && j > 0) {
-                        const normMain = normalizeForCompare(mainWords[i-1]);
-                        const normOther = normalizeForCompare(otherWords[j-1]);
-                        
-                        let cost;
-                        
-                        if (normMain === normOther) {
-                            // Полное совпадение — минимальная стоимость
-                            cost = 0;
-                        } else if (normMain.length >= 3 && normOther.length >= 3 && 
-                                   normMain.substring(0, Math.min(3, normMain.length)) === 
-                                   normOther.substring(0, Math.min(3, normOther.length))) {
-                            // Общий корень — низкая стоимость
-                            cost = 0.4;
-                        } else {
-                            // Полная замена — высокая стоимость
-                            cost = 1.2;
-                        }
-                        
-                        // Бонус за контекст
-                        const ctxScore = contextScore(i, j, 2);
-                        cost -= ctxScore * 0.15;
-                        
-                        const totalCost = dp[i-1][j-1] + Math.max(0, cost);
-                        
-                        if (totalCost < dp[i][j]) {
-                            dp[i][j] = totalCost;
-                            track[i][j] = 'diag';
-                        }
+                
+                // Если не нашли хорошего варианта — продвигаем все по одному
+                if (!bestAdvance) {
+                    bestAdvance = [];
+                    for (let i = 0; i < numLists; i++) {
+                        bestAdvance.push(pointers[i] < lengths[i] ? 1 : 0);
                     }
                 }
-            }
-            
-            // Обратный ход
-            const alignment = [];
-            let i = m, j = n;
-            
-            while (i > 0 || j > 0) {
-                if (i > 0 && j > 0 && track[i][j] === 'diag') {
-                    const normMain = normalizeForCompare(mainWords[i-1]);
-                    const normOther = normalizeForCompare(otherWords[j-1]);
-                    
-                    alignment.unshift({
-                        main: mainWords[i-1],
-                        other: otherWords[j-1],
-                        type: normMain === normOther ? 'match' : 'substitution'
-                    });
-                    i--; j--;
-                } else if (i > 0 && track[i][j] === 'up') {
-                    alignment.unshift({
-                        main: mainWords[i-1],
-                        other: '—',
-                        type: 'deletion'
-                    });
-                    i--;
-                } else if (j > 0 && track[i][j] === 'left') {
-                    alignment.unshift({
-                        main: '—',
-                        other: otherWords[j-1],
-                        type: 'insertion'
-                    });
-                    j--;
-                } else {
-                    // Fallback
-                    if (i > 0 && j > 0) {
-                        alignment.unshift({
-                            main: mainWords[i-1],
-                            other: otherWords[j-1],
-                            type: 'substitution'
-                        });
-                        i--; j--;
-                    } else if (i > 0) {
-                        alignment.unshift({
-                            main: mainWords[i-1],
-                            other: '—',
-                            type: 'deletion'
-                        });
-                        i--;
+                
+                // Формируем строку
+                for (let i = 0; i < numLists; i++) {
+                    if (bestAdvance[i] && pointers[i] < lengths[i]) {
+                        row.push(allLists[i][pointers[i]]);
+                        pointers[i]++;
                     } else {
-                        alignment.unshift({
-                            main: '—',
-                            other: otherWords[j-1],
-                            type: 'insertion'
-                        });
-                        j--;
+                        row.push('—');
                     }
                 }
+                
+                result.push(row);
+                
+                // Защита от бесконечного цикла
+                if (result.length > 10000) break;
             }
             
-            return alignment;
+            // Преобразуем в формат alignments для renderWordAlignmentTable
+            const alignments = [];
+            for (let listIdx = 0; listIdx < otherWordsArray.length; listIdx++) {
+                const alignment = [];
+                for (let rowIdx = 0; rowIdx < result.length; rowIdx++) {
+                    alignment.push({
+                        main: rowIdx < result.length ? result[rowIdx][0] : '—',
+                        other: result[rowIdx][listIdx + 1] || '—',
+                        type: 'match'
+                    });
+                }
+                alignments.push(alignment);
+            }
+            
+            // Обновляем mainWords (могли добавиться вставки)
+            const newMainWords = result.map(row => row[0]);
+            
+            // Обновляем alignedData.mainWords
+            if (alignedData) {
+                alignedData.mainWords = newMainWords;
+            }
+            
+            return { alignments, newMainWords };
         }
 
                 // ==================== КОНСТАНТЫ ДЛЯ ОПРЕДЕЛЕНИЯ РАЗНОЧТЕНИЙ ====================
@@ -896,7 +865,7 @@
         
         // ==================== НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ====================
         
-        alignBtn.addEventListener('click', () => {
+               alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
             
             const mainIndex = parseInt(mainMsSelect.value);
@@ -911,33 +880,28 @@
             progressDiv.style.display = 'block';
             progressDiv.innerHTML = '⏳ Подготовка текста...';
             
-            // Получаем текст главного списка с учетом листов
             const mainMs = manuscripts[mainIndex];
             const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
             const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
             
-            // Остальные списки
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
             
-            // Выравниваем каждый список с главным
-            const alignedWords = [];
+            progressDiv.innerHTML = '⏳ Множественное выравнивание...';
             
-            otherMss.forEach((ms, idx) => {
-                progressDiv.innerHTML = `⏳ Выравнивание ${idx+1}/${otherMss.length}: ${ms.name}...`;
-                
-                const otherText = ms.data.fullText;
-                const otherWords = otherText.split(/\s+/).filter(w => w.length > 0);
-                
-                const alignment = alignWords(mainWords, otherWords);
-                alignedWords.push(alignment);
+            // Собираем слова из остальных списков
+            const otherWordsArray = otherMss.map(ms => {
+                const text = ms.data.fullText;
+                return text.split(/\s+/).filter(w => w.length > 0);
             });
             
-            // Формируем данные для таблицы
+            // Множественное выравнивание
+            const { alignments, newMainWords } = alignWords(mainWords, otherWordsArray);
+            
             alignedData = {
                 main: mainMs.name,
                 aligned: otherMss.map(m => m.name),
-                mainWords: mainWords,
-                alignments: alignedWords
+                mainWords: newMainWords,
+                alignments: alignments
             };
             
             progressDiv.style.display = 'none';
