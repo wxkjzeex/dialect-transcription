@@ -544,20 +544,12 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-        // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
+        function alignWords(mainWords, otherWordsArray) {
         
-         function alignWords(mainWords, otherWordsArray) {
-            // ==================== НАСТРОЙКИ ====================
-            const MATCH_SCORE = 2;
-            const PARTIAL_MATCH = 1;
-            const MISMATCH = -1;
-            const GAP = -2;
-        
-            // ==================== НОРМАЛИЗАЦИЯ ====================
             function normalize(word) {
                 if (!word || word === '—') return '';
                 return word.toLowerCase()
-                    .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, '')
+                    .replace(/[·⸱※∽⁘:.,;!?]/g, '')
                     .replace(/[҃҄҅҆]/g, '')
                     .replace(/[ъь]$/, '')
                     .replace(/[ѣ]/g, 'е')
@@ -568,99 +560,147 @@
                     .replace(/[ꙋѹоу]/g, 'у');
             }
         
-            function similarity(a, b) {
-                const na = normalize(a);
-                const nb = normalize(b);
-        
-                if (!na && !nb) return 0;
-                if (na === nb) return MATCH_SCORE;
-        
-                // частичное совпадение (общий префикс)
-                let prefix = 0;
-                for (let i = 0; i < Math.min(na.length, nb.length); i++) {
-                    if (na[i] === nb[i]) prefix++;
-                    else break;
-                }
-        
-                if (prefix >= Math.min(3, Math.floor(Math.min(na.length, nb.length) * 0.6))) {
-                    return PARTIAL_MATCH;
-                }
-        
-                return MISMATCH;
-            }
-        
-            // ==================== PAIRWISE ALIGNMENT ====================
-            function needlemanWunsch(seq1, seq2) {
+            // ==================== LCS (якоря) ====================
+            function findAnchors(seq1, seq2) {
                 const n = seq1.length;
                 const m = seq2.length;
         
                 const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+        
+                for (let i = 1; i <= n; i++) {
+                    for (let j = 1; j <= m; j++) {
+                        if (normalize(seq1[i - 1]) === normalize(seq2[j - 1])) {
+                            dp[i][j] = dp[i - 1][j - 1] + 1;
+                        } else {
+                            dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                        }
+                    }
+                }
+        
+                let i = n, j = m;
+                const anchors = [];
+        
+                while (i > 0 && j > 0) {
+                    if (normalize(seq1[i - 1]) === normalize(seq2[j - 1])) {
+                        anchors.unshift([i - 1, j - 1]);
+                        i--; j--;
+                    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+                        i--;
+                    } else {
+                        j--;
+                    }
+                }
+        
+                return anchors;
+            }
+        
+            // ==================== Needleman-Wunsch локально ====================
+            function alignSegment(a, b) {
+                const MATCH = 2;
+                const MISMATCH = -1;
+                const GAP = -2;
+        
+                const n = a.length;
+                const m = b.length;
+        
+                const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
                 const trace = Array.from({ length: n + 1 }, () => Array(m + 1).fill(null));
         
-                // инициализация
                 for (let i = 1; i <= n; i++) {
                     dp[i][0] = i * GAP;
                     trace[i][0] = 'up';
                 }
+        
                 for (let j = 1; j <= m; j++) {
                     dp[0][j] = j * GAP;
                     trace[0][j] = 'left';
                 }
         
-                // заполнение
                 for (let i = 1; i <= n; i++) {
                     for (let j = 1; j <= m; j++) {
-                        const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
-                        const del = dp[i - 1][j] + GAP;
-                        const ins = dp[i][j - 1] + GAP;
+                        const match = normalize(a[i - 1]) === normalize(b[j - 1]) ? MATCH : MISMATCH;
         
-                        const max = Math.max(match, del, ins);
+                        const diag = dp[i - 1][j - 1] + match;
+                        const up = dp[i - 1][j] + GAP;
+                        const left = dp[i][j - 1] + GAP;
+        
+                        const max = Math.max(diag, up, left);
                         dp[i][j] = max;
         
-                        if (max === match) trace[i][j] = 'diag';
-                        else if (max === del) trace[i][j] = 'up';
+                        if (max === diag) trace[i][j] = 'diag';
+                        else if (max === up) trace[i][j] = 'up';
                         else trace[i][j] = 'left';
                     }
                 }
         
-                // восстановление
                 let i = n, j = m;
-                const aligned1 = [];
-                const aligned2 = [];
+                const A = [], B = [];
         
                 while (i > 0 || j > 0) {
                     if (i > 0 && j > 0 && trace[i][j] === 'diag') {
-                        aligned1.unshift(seq1[i - 1]);
-                        aligned2.unshift(seq2[j - 1]);
+                        A.unshift(a[i - 1]);
+                        B.unshift(b[j - 1]);
                         i--; j--;
                     } else if (i > 0 && trace[i][j] === 'up') {
-                        aligned1.unshift(seq1[i - 1]);
-                        aligned2.unshift('—');
+                        A.unshift(a[i - 1]);
+                        B.unshift('—');
                         i--;
                     } else {
-                        aligned1.unshift('—');
-                        aligned2.unshift(seq2[j - 1]);
+                        A.unshift('—');
+                        B.unshift(b[j - 1]);
                         j--;
                     }
                 }
         
-                return [aligned1, aligned2];
+                return [A, B];
             }
         
-            // ==================== PROGRESSIVE ALIGNMENT ====================
+            // ==================== ОСНОВНОЙ ПРОЦЕСС ====================
             let alignedMain = [...mainWords];
             let alignedOthers = [];
         
-            otherWordsArray.forEach((otherWords, idx) => {
-                const [newMain, newOther] = needlemanWunsch(alignedMain, otherWords);
+            otherWordsArray.forEach(otherWords => {
         
-                // обновляем уже выровненные списки (вставляем gap’ы)
+                const anchors = findAnchors(alignedMain, otherWords);
+        
+                let resultMain = [];
+                let resultOther = [];
+        
+                let prevMain = 0;
+                let prevOther = 0;
+        
+                anchors.forEach(([i, j]) => {
+        
+                    const segMain = alignedMain.slice(prevMain, i);
+                    const segOther = otherWords.slice(prevOther, j);
+        
+                    const [a, b] = alignSegment(segMain, segOther);
+        
+                    resultMain.push(...a);
+                    resultOther.push(...b);
+        
+                    resultMain.push(alignedMain[i]);
+                    resultOther.push(otherWords[j]);
+        
+                    prevMain = i + 1;
+                    prevOther = j + 1;
+                });
+        
+                const [a, b] = alignSegment(
+                    alignedMain.slice(prevMain),
+                    otherWords.slice(prevOther)
+                );
+        
+                resultMain.push(...a);
+                resultOther.push(...b);
+        
+                // обновляем предыдущие списки
                 alignedOthers = alignedOthers.map(existing => {
                     const updated = [];
                     let ptr = 0;
         
-                    for (let i = 0; i < newMain.length; i++) {
-                        if (newMain[i] === '—') {
+                    for (let i = 0; i < resultMain.length; i++) {
+                        if (resultMain[i] === '—') {
                             updated.push('—');
                         } else {
                             updated.push(existing[ptr]);
@@ -671,18 +711,16 @@
                     return updated;
                 });
         
-                alignedMain = newMain;
-                alignedOthers.push(newOther);
+                alignedMain = resultMain;
+                alignedOthers.push(resultOther);
             });
         
-            // ==================== ФОРМИРОВАНИЕ РЕЗУЛЬТАТА ====================
-            const alignments = alignedOthers.map(otherList => {
-                return alignedMain.map((word, i) => ({
+            const alignments = alignedOthers.map(other =>
+                alignedMain.map((word, i) => ({
                     main: word,
-                    other: otherList[i] || '—',
-                    type: 'match'
-                }));
-            });
+                    other: other[i] || '—'
+                }))
+            );
         
             return {
                 alignments,
