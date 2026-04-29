@@ -544,52 +544,21 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-      function alignMultiple(mainWords, otherWordsArray) {
-        
-            let finalMain = null;
-            let allAlignments = [];
-        
-            otherWordsArray.forEach((otherWords, idx) => {
-        
-                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
-        
-                if (idx === 0) {
-                    // первый проход — фиксируем шаблон
-                    finalMain = alignedMain;
-                    allAlignments.push(alignedOther);
-                } else {
-                    // подгоняем к уже зафиксированному main
-                    const [newMain, newOther] = needlemanWunsch(finalMain, alignedOther);
-        
-                    // обновляем все предыдущие выравнивания
-                    allAlignments = allAlignments.map(prev => {
-                        const updated = [];
-                        let j = 0;
-        
-                        for (let i = 0; i < newMain.length; i++) {
-                            if (newMain[i] === '—') {
-                                updated.push('—');
-                            } else {
-                                updated.push(prev[j] || '—');
-                                j++;
-                            }
-                        }
-        
-                        return updated;
-                    });
-        
-                    finalMain = newMain;
-                    allAlignments.push(newOther);
-                }
-            });
-        
-            return {
-                mainWords: finalMain,
-                alignments: allAlignments.map(arr =>
-                    arr.map(word => ({ other: word }))
-                )
-            };
-        }
+           function alignMultiple(mainWords, otherWordsArray) {
+                // Каждый список выравнивается НЕЗАВИСИМО с ИСХОДНЫМ главным
+                const allAlignments = otherWordsArray.map(otherWords => {
+                    const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
+                    return alignedOther;  // возвращаем только выровненный другой список
+                });
+    
+                // Главный список НЕ меняется — он эталон
+                return {
+                    mainWords: mainWords,  // исходный, без изменений
+                    alignments: allAlignments.map(arr =>
+                        arr.map(word => ({ other: word }))
+                    )
+                };
+            }
 
         // ==================== ЛЕВЕНШТЕЙН ====================
         function levenshtein(a, b) {
