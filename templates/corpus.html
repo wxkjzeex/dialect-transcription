@@ -312,6 +312,89 @@
             border-radius: 3px;
             margin-right: 4px;
         }
+
+                /* Модальное окно контекста */
+        .context-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .context-modal.active {
+            display: flex;
+        }
+        
+        .context-content {
+            background: #fffbf5;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            border: 1px solid #d4c5b0;
+            position: relative;
+        }
+        
+        .context-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #8b7355;
+            transition: color 0.2s;
+        }
+        
+        .context-close:hover {
+            color: #4a3d2c;
+        }
+        
+        .context-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #d4c5b0;
+        }
+        
+        .context-word-highlight {
+            background: #ffeaa7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            color: #c0392b;
+            border-bottom: 2px solid #e74c3c;
+        }
+        
+        .context-text {
+            font-family: 'Noto Serif', 'Times New Roman', serif;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #2c241a;
+            padding: 16px;
+            background: #fdfaf6;
+            border-radius: 8px;
+            border: 1px solid #e0d3c4;
+            margin-bottom: 12px;
+        }
+        
+        .context-meta {
+            font-size: 12px;
+            color: #8b7355;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 <body>
@@ -325,6 +408,19 @@
             <div class="tab" onclick="window.location.href='/'">Транскрипция</div>
             <div class="tab active">Корпус</div>
             <div class="tab" onclick="window.location.href='/map'">Карта</div>
+        </div>
+
+        <!-- Модальное окно контекста -->
+        <div class="context-modal" id="contextModal">
+            <div class="context-content">
+                <span class="context-close" onclick="closeContext()">✕</span>
+                <div class="context-title" id="contextTitle">Контекст</div>
+                <div class="context-text" id="contextText"></div>
+                <div class="context-meta">
+                    <span id="contextSource"></span>
+                    <span id="contextPosition"></span>
+                </div>
+            </div>
         </div>
         
         <div class="content">
@@ -355,6 +451,7 @@
             <div id="alignmentResult"></div>
         </div>
     </div>
+    
 
     <script>
         
@@ -1106,6 +1203,30 @@
                     <button class="btn btn-secondary" onclick="copyStatsToClipboard()">📋 Копировать статистику</button>
                 </div>
             `;
+            // Добавляем обработчики клика для контекста
+            setTimeout(() => {
+                document.querySelectorAll('.verse-text').forEach(cell => {
+                    cell.addEventListener('click', function(e) {
+                        // Не показываем контекст при двойном клике (редактирование)
+                        if (this.classList.contains('editing')) return;
+                        
+                        const word = this.textContent.trim();
+                        if (!word || word === '—') return;
+                        
+                        const colIdx = parseInt(this.dataset.col);
+                        const allNames = [alignedData.main, ...alignedData.aligned];
+                        const manuscriptName = allNames[colIdx];
+                        
+                        if (manuscriptName) {
+                            showContext(word, manuscriptName);
+                        }
+                    });
+                    
+                    // Стиль курсора
+                    cell.style.cursor = 'pointer';
+                    cell.title = 'Нажмите для просмотра контекста';
+                });
+            }, 100);
             
             container.innerHTML = html;
             
@@ -1562,6 +1683,112 @@
             }
         }
 
+                // ==================== КОНТЕКСТ ПРИ КЛИКЕ ====================
+        
+        // Хранилище исходных текстов для контекста
+        let manuscriptTexts = {};
+        
+        // Сохраняем исходные тексты при парсинге
+        const originalHandleFiles = handleFiles;
+        handleFiles = async function(files) {
+            await originalHandleFiles(files);
+            // Сохраняем текст каждого манускрипта
+            manuscripts.forEach(ms => {
+                manuscriptTexts[ms.name] = ms.data.fullText;
+            });
+        };
+        
+        // Функция получения контекста слова
+        function getWordContext(fullText, word, contextSize = 5) {
+            if (!fullText || !word) return null;
+            
+            const words = fullText.split(/\s+/);
+            const wordIndex = words.findIndex(w => w === word);
+            
+            if (wordIndex === -1) {
+                // Ищем с нормализацией
+                const normalizedWord = normalizeText(word);
+                const normIndex = words.findIndex(w => normalizeText(w) === normalizedWord);
+                if (normIndex === -1) return null;
+                
+                const start = Math.max(0, normIndex - contextSize);
+                const end = Math.min(words.length, normIndex + contextSize + 1);
+                
+                return {
+                    before: words.slice(start, normIndex),
+                    word: words[normIndex],
+                    after: words.slice(normIndex + 1, end),
+                    position: normIndex + 1,
+                    total: words.length
+                };
+            }
+            
+            const start = Math.max(0, wordIndex - contextSize);
+            const end = Math.min(words.length, wordIndex + contextSize + 1);
+            
+            return {
+                before: words.slice(start, wordIndex),
+                word: words[wordIndex],
+                after: words.slice(wordIndex + 1, end),
+                position: wordIndex + 1,
+                total: words.length
+            };
+        }
+        
+        // Показ контекста
+        function showContext(word, manuscriptName) {
+            const fullText = manuscriptTexts[manuscriptName];
+            if (!fullText) {
+                alert('Текст не найден для: ' + manuscriptName);
+                return;
+            }
+            
+            const context = getWordContext(fullText, word);
+            if (!context) {
+                alert('Слово не найдено в тексте');
+                return;
+            }
+            
+            const modal = document.getElementById('contextModal');
+            const title = document.getElementById('contextTitle');
+            const text = document.getElementById('contextText');
+            const source = document.getElementById('contextSource');
+            const position = document.getElementById('contextPosition');
+            
+            title.textContent = `Контекст слова «${word}»`;
+            
+            // Формируем текст с подсветкой
+            const beforeHtml = context.before.map(w => escapeHtml(w)).join(' ');
+            const wordHtml = `<span class="context-word-highlight">${escapeHtml(context.word)}</span>`;
+            const afterHtml = context.after.map(w => escapeHtml(w)).join(' ');
+            
+            text.innerHTML = `${beforeHtml} ${wordHtml} ${afterHtml}`;
+            source.textContent = `📄 ${manuscriptName}`;
+            position.textContent = `Слово ${context.position} из ${context.total}`;
+            
+            modal.classList.add('active');
+        }
+        
+        // Закрытие контекста
+        window.closeContext = function() {
+            document.getElementById('contextModal').classList.remove('active');
+        };
+        
+        // Закрытие по клику вне окна
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('contextModal');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+        
+        // Закрытие по Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.getElementById('contextModal').classList.remove('active');
+            }
+        });
+
         // Сессии
         window.saveSession = function() {
             updateAlignedDataFromTable();
@@ -1580,6 +1807,16 @@
         
         window.loadSession = function() {
             const saved = localStorage.getItem('corpusSession');
+            // Восстанавливаем тексты из загруженных файлов
+            if (session.files) {
+                session.files.forEach(name => {
+                    const ms = manuscripts.find(m => m.name === name);
+                    if (ms) {
+                        manuscriptTexts[ms.name] = ms.data.fullText;
+                    }
+                });
+            }
+            
             if (saved) {
                 const session = JSON.parse(saved);
                 folioStart.value = session.sheets.start;
