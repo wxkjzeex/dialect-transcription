@@ -544,44 +544,42 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-        function alignWords(mainWords, otherWordsArray) {
-
-            const results = [];
-            let globalMain = [...mainWords];
+       function alignMultiple(mainWords, otherWordsArray) {
+            let alignedMain = mainWords.slice();
+            let allAlignments = [];
         
             otherWordsArray.forEach(otherWords => {
         
-                // ВСЕГДА выравниваем к оригинальному main
-                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
+                const [newMain, newOther] = needlemanWunsch(alignedMain, otherWords);
         
-                // синхронизация длины (очень важно)
-                if (alignedMain.length > globalMain.length) {
-                    const diff = alignedMain.length - globalMain.length;
+                // обновляем главный список (с gap'ами)
+                alignedMain = newMain;
         
-                    // расширяем globalMain
-                    for (let i = 0; i < diff; i++) {
-                        globalMain.push('—');
+                // обновляем уже выровненные списки
+                allAlignments = allAlignments.map(prev => {
+                    const updated = [];
+                    let j = 0;
+        
+                    for (let i = 0; i < newMain.length; i++) {
+                        if (newMain[i] === '—') {
+                            updated.push('—');
+                        } else {
+                            updated.push(prev[j] || '—');
+                            j++;
+                        }
                     }
         
-                    // расширяем уже выровненные
-                    results.forEach(r => {
-                        for (let i = 0; i < diff; i++) {
-                            r.push({ main: '—', other: '—' });
-                        }
-                    });
-                }
+                    return updated;
+                });
         
-                const pairs = alignedMain.map((word, i) => ({
-                    main: word,
-                    other: alignedOther[i] || '—'
-                }));
-        
-                results.push(pairs);
+                allAlignments.push(newOther);
             });
         
             return {
-                alignments: results,
-                newMainWords: globalMain
+                mainWords: alignedMain,
+                alignments: allAlignments.map(arr =>
+                    arr.map(word => ({ other: word }))
+                )
             };
         }
 
@@ -626,9 +624,9 @@
 
         // ==================== УМНАЯ МЕТРИКА ====================
         function similarity(a, b) {
-            const MATCH = 3;
-            const PARTIAL = 1;
-            const MISMATCH = -2;
+            const MATCH = 5;      // было 3
+            const PARTIAL = 2;    // было 1
+            const MISMATCH = -3;  // было -2
         
             const na = normalize(a);
             const nb = normalize(b);
@@ -657,7 +655,7 @@
 
         // ==================== NEEDLEMAN-WUNSCH ====================
         function needlemanWunsch(seq1, seq2) {
-            const GAP = -4;
+            const GAP = -5;
         
             const n = seq1.length;
             const m = seq2.length;
@@ -917,7 +915,7 @@
             });
             
             // Множественное выравнивание
-            const { alignments, newMainWords } = alignWords(mainWords, otherWordsArray);
+            const { alignments, mainWords: newMainWords } = alignMultiple(mainWords, otherWordsArray);
             
             alignedData = {
                 main: mainMs.name,
