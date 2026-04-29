@@ -544,22 +544,69 @@
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
         
-           function alignMultiple(mainWords, otherWordsArray) {
-                // Каждый список выравнивается НЕЗАВИСИМО с ИСХОДНЫМ главным
-                const allAlignments = otherWordsArray.map(otherWords => {
-                    const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
-                    return alignedOther;  // возвращаем только выровненный другой список
+        function alignMultiple(mainWords, otherWordsArray) {
+            // Шаг 1: выравниваем каждый список с главным
+            const pairwiseAlignments = otherWordsArray.map(otherWords => {
+                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
+                return { alignedMain, alignedOther };
+            });
+            
+            // Шаг 2: строим общий главный список с пропусками
+            const maxLen = Math.max(mainWords.length, ...pairwiseAlignments.map(p => p.alignedMain.length));
+            const expandedMain = [];
+            const expandedOthers = pairwiseAlignments.map(() => []);
+            
+            // Идем по самой длинной версии главного списка
+            const refMain = pairwiseAlignments.reduce((longest, p) => 
+                p.alignedMain.length > longest.length ? p.alignedMain : longest, 
+                pairwiseAlignments[0]?.alignedMain || mainWords
+            );
+            
+            for (let pos = 0; pos < refMain.length; pos++) {
+                // Слово в главном списке на этой позиции
+                let mainWord = '—';
+                
+                // Ищем первое не-пропускное значение из всех выравниваний
+                for (let p of pairwiseAlignments) {
+                    if (pos < p.alignedMain.length && p.alignedMain[pos] !== '—') {
+                        mainWord = p.alignedMain[pos];
+                        break;
+                    }
+                }
+                
+                // Если не нашли в выравниваниях, берем из исходного
+                if (mainWord === '—') {
+                    let origIdx = 0;
+                    for (let i = 0; i < pos; i++) {
+                        if (i < pairwiseAlignments[0].alignedMain.length && 
+                            pairwiseAlignments[0].alignedMain[i] !== '—') {
+                            origIdx++;
+                        }
+                    }
+                    if (origIdx < mainWords.length) {
+                        mainWord = mainWords[origIdx];
+                    }
+                }
+                
+                expandedMain.push(mainWord);
+                
+                // Заполняем другие списки
+                pairwiseAlignments.forEach((p, idx) => {
+                    if (pos < p.alignedOther.length) {
+                        expandedOthers[idx].push(p.alignedOther[pos]);
+                    } else {
+                        expandedOthers[idx].push('—');
+                    }
                 });
-    
-                // Главный список НЕ меняется — он эталон
-                return {
-                    mainWords: mainWords,  // исходный, без изменений
-                    alignments: allAlignments.map(arr =>
-                        arr.map(word => ({ other: word }))
-                    )
-                };
             }
-
+            
+            return {
+                mainWords: expandedMain,
+                alignments: expandedOthers.map(arr =>
+                    arr.map(word => ({ other: word }))
+                )
+            };
+        }
         // ==================== ЛЕВЕНШТЕЙН ====================
         function levenshtein(a, b) {
             const dp = Array.from({ length: a.length + 1 }, () =>
