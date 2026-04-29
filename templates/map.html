@@ -1419,6 +1419,9 @@
             });
             
             select.innerHTML = html;
+
+            <input type="hidden" id="newQuestionCode">
+            <input type="hidden" id="newQuestionText">
             
             // Обработчик выбора вопроса
             select.addEventListener('change', function() {
@@ -1647,8 +1650,10 @@
             initMap();
             loadComments();
             loadData();
+            loadLocalData();        // ← ДОБАВИТЬ
             initIsoglosses();
             initRegionFilters();
+            populateQuestionSelect(); // ← ДОБАВИТЬ
 
             // Обработчики событий
             document.getElementById('searchBtn').addEventListener('click', performSearch);
@@ -1657,7 +1662,6 @@
                 if (e.key === 'Enter') performSearch();
             });
 
-            // Поиск по вопросам
             document.getElementById('questionSearch').addEventListener('input', filterByQuestion);
             document.getElementById('resetQuestionSearchBtn').addEventListener('click', resetQuestionSearch);
         };
