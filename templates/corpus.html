@@ -545,189 +545,179 @@
         }
         
         function alignWords(mainWords, otherWordsArray) {
-        
-            function normalize(word) {
-                if (!word || word === '—') return '';
-                return word.toLowerCase()
-                    .replace(/[·⸱※∽⁘:.,;!?]/g, '')
-                    .replace(/[҃҄҅҆]/g, '')
-                    .replace(/[ъь]$/, '')
-                    .replace(/[ѣ]/g, 'е')
-                    .replace(/[іѵї]/g, 'и')
-                    .replace(/[ѡꙩ]/g, 'о')
-                    .replace(/[ѧꙗ]/g, 'я')
-                    .replace(/[ѳ]/g, 'ф')
-                    .replace(/[ꙋѹоу]/g, 'у');
-            }
-        
-            // ==================== LCS (якоря) ====================
-            function findAnchors(seq1, seq2) {
-                const n = seq1.length;
-                const m = seq2.length;
-        
-                const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
-        
-                for (let i = 1; i <= n; i++) {
-                    for (let j = 1; j <= m; j++) {
-                        if (normalize(seq1[i - 1]) === normalize(seq2[j - 1])) {
-                            dp[i][j] = dp[i - 1][j - 1] + 1;
-                        } else {
-                            dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-                        }
-                    }
-                }
-        
-                let i = n, j = m;
-                const anchors = [];
-        
-                while (i > 0 && j > 0) {
-                    if (normalize(seq1[i - 1]) === normalize(seq2[j - 1])) {
-                        anchors.unshift([i - 1, j - 1]);
-                        i--; j--;
-                    } else if (dp[i - 1][j] > dp[i][j - 1]) {
-                        i--;
-                    } else {
-                        j--;
-                    }
-                }
-        
-                return anchors;
-            }
-        
-            // ==================== Needleman-Wunsch локально ====================
-            function alignSegment(a, b) {
-                const MATCH = 2;
-                const MISMATCH = -1;
-                const GAP = -2;
-        
-                const n = a.length;
-                const m = b.length;
-        
-                const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
-                const trace = Array.from({ length: n + 1 }, () => Array(m + 1).fill(null));
-        
-                for (let i = 1; i <= n; i++) {
-                    dp[i][0] = i * GAP;
-                    trace[i][0] = 'up';
-                }
-        
-                for (let j = 1; j <= m; j++) {
-                    dp[0][j] = j * GAP;
-                    trace[0][j] = 'left';
-                }
-        
-                for (let i = 1; i <= n; i++) {
-                    for (let j = 1; j <= m; j++) {
-                        const match = normalize(a[i - 1]) === normalize(b[j - 1]) ? MATCH : MISMATCH;
-        
-                        const diag = dp[i - 1][j - 1] + match;
-                        const up = dp[i - 1][j] + GAP;
-                        const left = dp[i][j - 1] + GAP;
-        
-                        const max = Math.max(diag, up, left);
-                        dp[i][j] = max;
-        
-                        if (max === diag) trace[i][j] = 'diag';
-                        else if (max === up) trace[i][j] = 'up';
-                        else trace[i][j] = 'left';
-                    }
-                }
-        
-                let i = n, j = m;
-                const A = [], B = [];
-        
-                while (i > 0 || j > 0) {
-                    if (i > 0 && j > 0 && trace[i][j] === 'diag') {
-                        A.unshift(a[i - 1]);
-                        B.unshift(b[j - 1]);
-                        i--; j--;
-                    } else if (i > 0 && trace[i][j] === 'up') {
-                        A.unshift(a[i - 1]);
-                        B.unshift('—');
-                        i--;
-                    } else {
-                        A.unshift('—');
-                        B.unshift(b[j - 1]);
-                        j--;
-                    }
-                }
-        
-                return [A, B];
-            }
-        
-            // ==================== ОСНОВНОЙ ПРОЦЕСС ====================
-            let alignedMain = [...mainWords];
-            let alignedOthers = [];
+
+            const results = [];
+            let globalMain = [...mainWords];
         
             otherWordsArray.forEach(otherWords => {
         
-                const anchors = findAnchors(alignedMain, otherWords);
+                // ВСЕГДА выравниваем к оригинальному main
+                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
         
-                let resultMain = [];
-                let resultOther = [];
+                // синхронизация длины (очень важно)
+                if (alignedMain.length > globalMain.length) {
+                    const diff = alignedMain.length - globalMain.length;
         
-                let prevMain = 0;
-                let prevOther = 0;
-        
-                anchors.forEach(([i, j]) => {
-        
-                    const segMain = alignedMain.slice(prevMain, i);
-                    const segOther = otherWords.slice(prevOther, j);
-        
-                    const [a, b] = alignSegment(segMain, segOther);
-        
-                    resultMain.push(...a);
-                    resultOther.push(...b);
-        
-                    resultMain.push(alignedMain[i]);
-                    resultOther.push(otherWords[j]);
-        
-                    prevMain = i + 1;
-                    prevOther = j + 1;
-                });
-        
-                const [a, b] = alignSegment(
-                    alignedMain.slice(prevMain),
-                    otherWords.slice(prevOther)
-                );
-        
-                resultMain.push(...a);
-                resultOther.push(...b);
-        
-                // обновляем предыдущие списки
-                alignedOthers = alignedOthers.map(existing => {
-                    const updated = [];
-                    let ptr = 0;
-        
-                    for (let i = 0; i < resultMain.length; i++) {
-                        if (resultMain[i] === '—') {
-                            updated.push('—');
-                        } else {
-                            updated.push(existing[ptr]);
-                            ptr++;
-                        }
+                    // расширяем globalMain
+                    for (let i = 0; i < diff; i++) {
+                        globalMain.push('—');
                     }
         
-                    return updated;
-                });
+                    // расширяем уже выровненные
+                    results.forEach(r => {
+                        for (let i = 0; i < diff; i++) {
+                            r.push({ main: '—', other: '—' });
+                        }
+                    });
+                }
         
-                alignedMain = resultMain;
-                alignedOthers.push(resultOther);
+                const pairs = alignedMain.map((word, i) => ({
+                    main: word,
+                    other: alignedOther[i] || '—'
+                }));
+        
+                results.push(pairs);
             });
         
-            const alignments = alignedOthers.map(other =>
-                alignedMain.map((word, i) => ({
-                    main: word,
-                    other: other[i] || '—'
-                }))
-            );
-        
             return {
-                alignments,
-                newMainWords: alignedMain
+                alignments: results,
+                newMainWords: globalMain
             };
         }
 
+        // ==================== ЛЕВЕНШТЕЙН ====================
+        function levenshtein(a, b) {
+            const dp = Array.from({ length: a.length + 1 }, () =>
+                Array(b.length + 1).fill(0)
+            );
+        
+            for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+            for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+        
+            for (let i = 1; i <= a.length; i++) {
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                    dp[i][j] = Math.min(
+                        dp[i - 1][j] + 1,
+                        dp[i][j - 1] + 1,
+                        dp[i - 1][j - 1] + cost
+                    );
+                }
+            }
+        
+            return dp[a.length][b.length];
+        }
+
+        // ==================== НОРМАЛИЗАЦИЯ ====================
+        function normalize(word) {
+            if (!word || word === '—') return '';
+        
+            return word.toLowerCase()
+                .replace(/[·⸱※∽⁘:.,;!?]+/g, '')
+                .replace(/[҃҄҅҆]/g, '')
+                .replace(/[ъь]$/, '')
+                .replace(/[ѣ]/g, 'е')
+                .replace(/[іѵї]/g, 'и')
+                .replace(/[ѡꙩ]/g, 'о')
+                .replace(/[ѧꙗ]/g, 'я')
+                .replace(/[ѳ]/g, 'ф')
+                .replace(/[ꙋѹоу]/g, 'у');
+        }
+
+        // ==================== УМНАЯ МЕТРИКА ====================
+        function similarity(a, b) {
+            const MATCH = 3;
+            const PARTIAL = 1;
+            const MISMATCH = -2;
+        
+            const na = normalize(a);
+            const nb = normalize(b);
+        
+            if (!na && !nb) return 0;
+            if (na === nb) return MATCH;
+        
+            // ЯКОРЯ
+            const anchors = ['и','же','въ','не','на','къ','съ','от','за','яко'];
+            if (anchors.includes(na) && anchors.includes(nb)) {
+                return MATCH;
+            }
+        
+            const dist = levenshtein(na, nb);
+            const maxLen = Math.max(na.length, nb.length);
+        
+            if (maxLen === 0) return 0;
+        
+            const ratio = dist / maxLen;
+        
+            if (ratio < 0.25) return PARTIAL;
+            if (ratio < 0.5) return 0;
+        
+            return MISMATCH;
+        }
+
+        // ==================== NEEDLEMAN-WUNSCH ====================
+        function needlemanWunsch(seq1, seq2) {
+            const GAP = -4;
+        
+            const n = seq1.length;
+            const m = seq2.length;
+        
+            const dp = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(0)
+            );
+        
+            const trace = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(null)
+            );
+        
+            for (let i = 1; i <= n; i++) {
+                dp[i][0] = i * GAP;
+                trace[i][0] = 'up';
+            }
+        
+            for (let j = 1; j <= m; j++) {
+                dp[0][j] = j * GAP;
+                trace[0][j] = 'left';
+            }
+        
+            for (let i = 1; i <= n; i++) {
+                for (let j = 1; j <= m; j++) {
+        
+                    const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
+                    const del = dp[i - 1][j] + GAP;
+                    const ins = dp[i][j - 1] + GAP;
+        
+                    const max = Math.max(match, del, ins);
+                    dp[i][j] = max;
+        
+                    if (max === match) trace[i][j] = 'diag';
+                    else if (max === del) trace[i][j] = 'up';
+                    else trace[i][j] = 'left';
+                }
+            }
+        
+            let i = n, j = m;
+            const aligned1 = [];
+            const aligned2 = [];
+        
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && trace[i][j] === 'diag') {
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift(seq2[j - 1]);
+                    i--; j--;
+                } else if (i > 0 && trace[i][j] === 'up') {
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift('—');
+                    i--;
+                } else {
+                    aligned1.unshift('—');
+                    aligned2.unshift(seq2[j - 1]);
+                    j--;
+                }
+            }
+        
+            return [aligned1, aligned2];
+        }
                 // ==================== КОНСТАНТЫ ДЛЯ ОПРЕДЕЛЕНИЯ РАЗНОЧТЕНИЙ ====================
         
         // Графические пары (разные буквы для одного звука)
