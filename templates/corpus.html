@@ -546,60 +546,93 @@
         }
         
         function alignMultiple(mainWords, otherWordsArray) {
-            // Шаг 1: выравниваем каждый список с главным
-            const pairwiseAlignments = otherWordsArray.map(otherWords => {
-                const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
-                return { alignedMain, alignedOther };
-            });
+            const allLists = [mainWords, ...otherWordsArray];
+            const numLists = allLists.length;
             
-            // Шаг 2: строим общий главный список с пропусками
-            const maxLen = Math.max(mainWords.length, ...pairwiseAlignments.map(p => p.alignedMain.length));
-            const expandedMain = [];
-            const expandedOthers = pairwiseAlignments.map(() => []);
+            // Функция: выровнять две последовательности, вернуть [seq1_aligned, seq2_aligned]
+            function alignTwo(seq1, seq2) {
+                return needlemanWunsch(seq1, seq2);
+            }
             
-            // Идем по самой длинной версии главного списка
-            const refMain = pairwiseAlignments.reduce((longest, p) => 
-                p.alignedMain.length > longest.length ? p.alignedMain : longest, 
-                pairwiseAlignments[0]?.alignedMain || mainWords
+            // Строим направляющее дерево: выравниваем все с первым (главным)
+            // и запоминаем позиции вставок в главном
+            const alignments = [];
+            let masterGaps = new Set(); // позиции в главном, где нужен пропуск
+            
+            for (let i = 0; i < otherWordsArray.length; i++) {
+                const [alignedMain, alignedOther] = alignTwo(mainWords, otherWordsArray[i]);
+                
+                // Отмечаем позиции, где в alignedMain появились пропуски (вставки в другом списке)
+                for (let pos = 0; pos < alignedMain.length; pos++) {
+                    if (alignedMain[pos] === '—') {
+                        masterGaps.add(pos);
+                    }
+                }
+                
+                alignments.push({ main: alignedMain, other: alignedOther });
+            }
+            
+            // Получаем отсортированный список позиций пропусков
+            const gapPositions = Array.from(masterGaps).sort((a, b) => a - b);
+            
+            // Строим единую матрицу: для каждого списка создаем массив слов,
+            // вставляя пропуски в нужных местах
+            const maxAlignedLen = Math.max(
+                mainWords.length + gapPositions.length,
+                ...alignments.map(a => a.main.length)
             );
             
-            for (let pos = 0; pos < refMain.length; pos++) {
-                // Слово в главном списке на этой позиции
-                let mainWord = '—';
-                
-                // Ищем первое не-пропускное значение из всех выравниваний
-                for (let p of pairwiseAlignments) {
-                    if (pos < p.alignedMain.length && p.alignedMain[pos] !== '—') {
-                        mainWord = p.alignedMain[pos];
-                        break;
-                    }
+            // Создаем расширенный главный список с пропусками
+            const expandedMain = [];
+            let mainIdx = 0;
+            let gapIdx = 0;
+            
+            for (let pos = 0; pos < maxAlignedLen; pos++) {
+                if (gapIdx < gapPositions.length && gapPositions[gapIdx] === pos) {
+                    expandedMain.push('—');
+                    gapIdx++;
+                } else if (mainIdx < mainWords.length) {
+                    expandedMain.push(mainWords[mainIdx]);
+                    mainIdx++;
+                } else {
+                    expandedMain.push('—');
                 }
+            }
+            
+            // Создаем выровненные списки для остальных
+            const expandedOthers = alignments.map(align => {
+                const result = [];
+                let otherIdx = 0;
                 
-                // Если не нашли в выравниваниях, берем из исходного
-                if (mainWord === '—') {
-                    let origIdx = 0;
-                    for (let i = 0; i < pos; i++) {
-                        if (i < pairwiseAlignments[0].alignedMain.length && 
-                            pairwiseAlignments[0].alignedMain[i] !== '—') {
-                            origIdx++;
+                for (let pos = 0; pos < expandedMain.length; pos++) {
+                    if (expandedMain[pos] === '—') {
+                        // В главном пропуск — в другом может быть слово
+                        if (otherIdx < align.other.length) {
+                            // Ищем соответствующее слово
+                            const word = align.other[otherIdx];
+                            // Проверяем, не соответствует ли это слово пропуску в главном
+                            if (pos < align.main.length && align.main[pos] === '—') {
+                                result.push(word);
+                                otherIdx++;
+                            } else {
+                                result.push('—');
+                            }
+                        } else {
+                            result.push('—');
+                        }
+                    } else {
+                        // В главном слово — в другом должно быть соответствие
+                        if (otherIdx < align.other.length) {
+                            result.push(align.other[otherIdx]);
+                            otherIdx++;
+                        } else {
+                            result.push('—');
                         }
                     }
-                    if (origIdx < mainWords.length) {
-                        mainWord = mainWords[origIdx];
-                    }
                 }
                 
-                expandedMain.push(mainWord);
-                
-                // Заполняем другие списки
-                pairwiseAlignments.forEach((p, idx) => {
-                    if (pos < p.alignedOther.length) {
-                        expandedOthers[idx].push(p.alignedOther[pos]);
-                    } else {
-                        expandedOthers[idx].push('—');
-                    }
-                });
-            }
+                return result;
+            });
             
             return {
                 mainWords: expandedMain,
@@ -608,6 +641,8 @@
                 )
             };
         }
+
+        
         // ==================== ЛЕВЕНШТЕЙН ====================
         function levenshtein(a, b) {
             const dp = Array.from({ length: a.length + 1 }, () =>
