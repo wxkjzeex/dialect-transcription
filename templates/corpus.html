@@ -546,12 +546,38 @@
         
         // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
         
-        // Алгоритм выравнивания Левенштейна (упрощенный Needleman-Wunsch)
+                // Алгоритм выравнивания с нормализацией церковнославянской графики
         function alignWords(mainWords, otherWords) {
             const m = mainWords.length;
             const n = otherWords.length;
             
-            // Создаем матрицу DP
+            // Функция нормализации слова для сравнения
+            function normalizeForCompare(word) {
+                if (!word || word === '—') return word;
+                
+                let normalized = word.toLowerCase()
+                    .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, '')
+                    .replace(/[҃҄҅҆]/g, '');  // убираем титла
+                
+                // Графические замены (приводим к единой форме)
+                const replacements = [
+                    ['ѣ', 'е'], ['ѵ', 'и'], ['ꙁ', 'з'], ['ꙋ', 'у'], ['ѡ', 'о'],
+                    ['ꙗ', 'я'], ['ѧ', 'я'], ['і', 'и'], ['ї', 'и'], ['ѳ', 'ф'],
+                    ['ѯ', 'кс'], ['ѱ', 'пс'], ['ѕ', 'з'], ['ꙑ', 'ы'], ['ꙓ', 'е'],
+                    ['оу', 'у'], ['ѹ', 'у'], ['ꙩ', 'о'], ['щ', 'шч']
+                ];
+                
+                for (let [old, newChar] of replacements) {
+                    normalized = normalized.split(old).join(newChar);
+                }
+                
+                // Убираем ъ и ь в конце слова
+                normalized = normalized.replace(/[ъь]$/, '');
+                
+                return normalized;
+            }
+            
+            // Создаем матрицу DP с нормализованным сравнением
             const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
             
             for (let i = 0; i <= m; i++) dp[i][0] = i;
@@ -559,7 +585,12 @@
             
             for (let i = 1; i <= m; i++) {
                 for (let j = 1; j <= n; j++) {
-                    const cost = mainWords[i-1] === otherWords[j-1] ? 0 : 1;
+                    const normMain = normalizeForCompare(mainWords[i-1]);
+                    const normOther = normalizeForCompare(otherWords[j-1]);
+                    
+                    // Сравниваем нормализованные формы
+                    const cost = normMain === normOther ? 0 : 1;
+                    
                     dp[i][j] = Math.min(
                         dp[i-1][j] + 1,      // удаление
                         dp[i][j-1] + 1,      // вставка
@@ -568,19 +599,28 @@
                 }
             }
             
-            // Обратный ход для получения выравнивания
+            // Обратный ход
             const alignment = [];
             let i = m, j = n;
             
             while (i > 0 || j > 0) {
-                if (i > 0 && j > 0 && dp[i][j] === dp[i-1][j-1] + (mainWords[i-1] === otherWords[j-1] ? 0 : 1)) {
-                    alignment.unshift({
-                        main: mainWords[i-1],
-                        other: otherWords[j-1],
-                        type: mainWords[i-1] === otherWords[j-1] ? 'match' : 'substitution'
-                    });
-                    i--; j--;
-                } else if (i > 0 && dp[i][j] === dp[i-1][j] + 1) {
+                if (i > 0 && j > 0) {
+                    const normMain = normalizeForCompare(mainWords[i-1]);
+                    const normOther = normalizeForCompare(otherWords[j-1]);
+                    const cost = normMain === normOther ? 0 : 1;
+                    
+                    if (dp[i][j] === dp[i-1][j-1] + cost) {
+                        alignment.unshift({
+                            main: mainWords[i-1],
+                            other: otherWords[j-1],
+                            type: normMain === normOther ? 'match' : 'substitution'
+                        });
+                        i--; j--;
+                        continue;
+                    }
+                }
+                
+                if (i > 0 && dp[i][j] === dp[i-1][j] + 1) {
                     alignment.unshift({
                         main: mainWords[i-1],
                         other: '—',
@@ -656,13 +696,12 @@
 
          // ==================== ОПРЕДЕЛЕНИЕ ТИПА РАЗНОЧТЕНИЯ ====================
         
-        // Определение типа разночтения для пары слов
-        function detectWordDiffType(mainWord, otherWord) {
+                function detectWordDiffType(mainWord, otherWord) {
             if (!mainWord || !otherWord) return null;
             if (mainWord === otherWord) return null;
             if (mainWord === '—' || otherWord === '—') return 'insertion';
             
-            // Нормализация
+            // Нормализация ОБОИХ слов
             const normMain = normalizeText(mainWord);
             const normOther = normalizeText(otherWord);
             
@@ -672,7 +711,7 @@
             let mainNoGraphic = normMain;
             let otherNoGraphic = normOther;
             for (let [old, new_] of GRAPHIC_PAIRS) {
-                const regex = new RegExp(old, 'g');
+                const regex = new RegExp(old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
                 mainNoGraphic = mainNoGraphic.replace(regex, new_);
                 otherNoGraphic = otherNoGraphic.replace(regex, new_);
             }
@@ -688,25 +727,24 @@
                 }
             }
             
-            // Морфологические: разница в окончаниях при общей основе > 3 букв
+            // Морфологические: общая основа > 3 букв
             let commonPrefix = '';
-            for (let i = 0; i < Math.min(normMain.length, normOther.length); i++) {
-                if (normMain[i] === normOther[i]) {
-                    commonPrefix += normMain[i];
+            for (let i = 0; i < Math.min(mainNoGraphic.length, otherNoGraphic.length); i++) {
+                if (mainNoGraphic[i] === otherNoGraphic[i]) {
+                    commonPrefix += mainNoGraphic[i];
                 } else {
                     break;
                 }
             }
             
             if (commonPrefix.length >= 3) {
-                const suffix1 = normMain.slice(commonPrefix.length);
-                const suffix2 = normOther.slice(commonPrefix.length);
+                const suffix1 = mainNoGraphic.slice(commonPrefix.length);
+                const suffix2 = otherNoGraphic.slice(commonPrefix.length);
                 if (suffix1.length <= 3 && suffix2.length <= 3) {
                     return 'morph';
                 }
             }
             
-            // Лексические: все остальное
             return 'lexical';
         }
 
