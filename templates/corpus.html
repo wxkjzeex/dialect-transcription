@@ -546,56 +546,125 @@
         
         // ==================== ПОСЛОВНОЕ ВЫРАВНИВАНИЕ ====================
         
-                // Алгоритм выравнивания с нормализацией церковнославянской графики
+                // Алгоритм выравнивания с учетом контекстных окон
         function alignWords(mainWords, otherWords) {
             const m = mainWords.length;
             const n = otherWords.length;
             
-            // Функция нормализации слова для сравнения
+            // Нормализация для сравнения
             function normalizeForCompare(word) {
                 if (!word || word === '—') return word;
-                
                 let normalized = word.toLowerCase()
                     .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, '')
-                    .replace(/[҃҄҅҆]/g, '');  // убираем титла
+                    .replace(/[҃҄҅҆]/g, '');
                 
-                // Графические замены (приводим к единой форме)
                 const replacements = [
                     ['ѣ', 'е'], ['ѵ', 'и'], ['ꙁ', 'з'], ['ꙋ', 'у'], ['ѡ', 'о'],
                     ['ꙗ', 'я'], ['ѧ', 'я'], ['і', 'и'], ['ї', 'и'], ['ѳ', 'ф'],
                     ['ѯ', 'кс'], ['ѱ', 'пс'], ['ѕ', 'з'], ['ꙑ', 'ы'], ['ꙓ', 'е'],
-                    ['оу', 'у'], ['ѹ', 'у'], ['ꙩ', 'о'], ['щ', 'шч']
+                    ['оу', 'у'], ['ѹ', 'у'], ['ꙩ', 'о'], ['щ', 'шч'],
+                    ['ю', 'у'], ['ѭ', 'у'], ['ѥ', 'е']
                 ];
-                
                 for (let [old, newChar] of replacements) {
                     normalized = normalized.split(old).join(newChar);
                 }
-                
-                // Убираем ъ и ь в конце слова
                 normalized = normalized.replace(/[ъь]$/, '');
-                
                 return normalized;
             }
             
-            // Создаем матрицу DP с нормализованным сравнением
-            const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(0));
+            // Функция контекстной близости (учитывает соседей)
+            function contextScore(i, j, radius) {
+                let score = 0;
+                for (let r = 1; r <= radius; r++) {
+                    // Проверяем контекст слева
+                    if (i - r >= 0 && j - r >= 0) {
+                        if (normalizeForCompare(mainWords[i - r]) === normalizeForCompare(otherWords[j - r])) {
+                            score += 1.0 / r;
+                        }
+                    }
+                    // Проверяем контекст справа
+                    if (i + r <= m && j + r <= n) {
+                        if (normalizeForCompare(mainWords[i + r - 2]) === normalizeForCompare(otherWords[j + r - 2])) {
+                            score += 1.0 / r;
+                        }
+                    }
+                }
+                return score;
+            }
             
-            for (let i = 0; i <= m; i++) dp[i][0] = i;
-            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            // Список «стоп-слов» — коротких служебных, которые не должны быть якорями
+            const stopWords = new Set(['и', 'же', 'бо', 'на', 'въ', 'съ', 'не', 'да', 'ꙗко', 'отъ', 
+                                      'а', 'нъ', 'ли', 'о', 'по', 'прѣдъ', 'оу', 'ѣ', 'се', 'сь',
+                                      'вьсь', 'тъ', 'сѧ', 'ми', 'ти', 'мѧ', 'тѧ', 'ѥго', 'ѥмоу']);
             
-            for (let i = 1; i <= m; i++) {
-                for (let j = 1; j <= n; j++) {
-                    const normMain = normalizeForCompare(mainWords[i-1]);
-                    const normOther = normalizeForCompare(otherWords[j-1]);
+            // Проверка — можно ли использовать слово как якорь
+            function isAnchorWord(word) {
+                if (!word) return false;
+                const norm = normalizeForCompare(word);
+                return norm.length >= 4 && !stopWords.has(norm);
+            }
+            
+            // Создаем матрицу с контекстными весами
+            const dp = Array(m + 1).fill().map(() => Array(n + 1).fill(Infinity));
+            const track = Array(m + 1).fill().map(() => Array(n + 1).fill(null));
+            
+            dp[0][0] = 0;
+            
+            for (let i = 0; i <= m; i++) {
+                for (let j = 0; j <= n; j++) {
+                    if (i === 0 && j === 0) continue;
                     
-                    // Сравниваем нормализованные формы
-                    const cost = normMain === normOther ? 0 : 1;
+                    // Удаление (из главного)
+                    if (i > 0) {
+                        const delCost = mainWords[i-1] === '—' ? 0.5 : 1;
+                        const cost = dp[i-1][j] + delCost;
+                        if (cost < dp[i][j]) {
+                            dp[i][j] = cost;
+                            track[i][j] = 'up';
+                        }
+                    }
                     
-                    dp[i][j] = Math.min(
-                        dp[i-1][j] + 1,      // удаление
-                        dp[i][j-1] + 1,      // вставка
-                        dp[i-1][j-1] + cost  // замена/совпадение
-                    );
+                    // Вставка (в другой)
+                    if (j > 0) {
+                        const insCost = otherWords[j-1] === '—' ? 0.5 : 1;
+                        const cost = dp[i][j-1] + insCost;
+                        if (cost < dp[i][j]) {
+                            dp[i][j] = cost;
+                            track[i][j] = 'left';
+                        }
+                    }
+                    
+                    // Замена/совпадение
+                    if (i > 0 && j > 0) {
+                        const normMain = normalizeForCompare(mainWords[i-1]);
+                        const normOther = normalizeForCompare(otherWords[j-1]);
+                        
+                        let cost;
+                        
+                        if (normMain === normOther) {
+                            // Полное совпадение — минимальная стоимость
+                            cost = 0;
+                        } else if (normMain.length >= 3 && normOther.length >= 3 && 
+                                   normMain.substring(0, Math.min(3, normMain.length)) === 
+                                   normOther.substring(0, Math.min(3, normOther.length))) {
+                            // Общий корень — низкая стоимость
+                            cost = 0.4;
+                        } else {
+                            // Полная замена — высокая стоимость
+                            cost = 1.2;
+                        }
+                        
+                        // Бонус за контекст
+                        const ctxScore = contextScore(i, j, 2);
+                        cost -= ctxScore * 0.15;
+                        
+                        const totalCost = dp[i-1][j-1] + Math.max(0, cost);
+                        
+                        if (totalCost < dp[i][j]) {
+                            dp[i][j] = totalCost;
+                            track[i][j] = 'diag';
+                        }
+                    }
                 }
             }
             
@@ -604,36 +673,54 @@
             let i = m, j = n;
             
             while (i > 0 || j > 0) {
-                if (i > 0 && j > 0) {
+                if (i > 0 && j > 0 && track[i][j] === 'diag') {
                     const normMain = normalizeForCompare(mainWords[i-1]);
                     const normOther = normalizeForCompare(otherWords[j-1]);
-                    const cost = normMain === normOther ? 0 : 1;
                     
-                    if (dp[i][j] === dp[i-1][j-1] + cost) {
-                        alignment.unshift({
-                            main: mainWords[i-1],
-                            other: otherWords[j-1],
-                            type: normMain === normOther ? 'match' : 'substitution'
-                        });
-                        i--; j--;
-                        continue;
-                    }
-                }
-                
-                if (i > 0 && dp[i][j] === dp[i-1][j] + 1) {
+                    alignment.unshift({
+                        main: mainWords[i-1],
+                        other: otherWords[j-1],
+                        type: normMain === normOther ? 'match' : 'substitution'
+                    });
+                    i--; j--;
+                } else if (i > 0 && track[i][j] === 'up') {
                     alignment.unshift({
                         main: mainWords[i-1],
                         other: '—',
                         type: 'deletion'
                     });
                     i--;
-                } else {
+                } else if (j > 0 && track[i][j] === 'left') {
                     alignment.unshift({
                         main: '—',
                         other: otherWords[j-1],
                         type: 'insertion'
                     });
                     j--;
+                } else {
+                    // Fallback
+                    if (i > 0 && j > 0) {
+                        alignment.unshift({
+                            main: mainWords[i-1],
+                            other: otherWords[j-1],
+                            type: 'substitution'
+                        });
+                        i--; j--;
+                    } else if (i > 0) {
+                        alignment.unshift({
+                            main: mainWords[i-1],
+                            other: '—',
+                            type: 'deletion'
+                        });
+                        i--;
+                    } else {
+                        alignment.unshift({
+                            main: '—',
+                            other: otherWords[j-1],
+                            type: 'insertion'
+                        });
+                        j--;
+                    }
                 }
             }
             
