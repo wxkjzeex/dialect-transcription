@@ -1569,12 +1569,21 @@
                 const userRecords = JSON.parse(saved);
                 console.log(`Загружено ${userRecords.length} локальных записей`);
                 
-                // Добавляем settlements из сохраненных данных
+                // Собираем уникальные населенные пункты из локальных данных
+                const localSettlements = new Map();
+                
                 userRecords.forEach(rec => {
-                    // Проверяем, нет ли уже такого пункта
-                    if (!settlements.find(s => s.name === rec.settlement)) {
-                        // Не добавляем дубликаты без координат
+                    // Группируем записи по названию пункта
+                    if (!localSettlements.has(rec.settlement)) {
+                        localSettlements.set(rec.settlement, {
+                            name: rec.settlement,
+                            district: rec.district,
+                            region: rec.region,
+                            records: []
+                        });
                     }
+                    localSettlements.get(rec.settlement).records.push(rec);
+                    
                     // Добавляем запись в dialectData, если её ещё нет
                     if (!dialectData.find(d => 
                         d.settlement === rec.settlement && 
@@ -1582,6 +1591,44 @@
                         d.ling_unit_1 === rec.ling_unit_1
                     )) {
                         dialectData.push(rec);
+                    }
+                });
+                
+                // Для каждого локального пункта получаем координаты
+                localSettlements.forEach(async (settData, settlementName) => {
+                    // Проверяем, нет ли уже такого пункта в settlements
+                    if (!settlements.find(s => s.name === settlementName)) {
+                        // Пытаемся получить координаты через геокодирование
+                        const coords = await geocodeSettlement(
+                            settlementName, 
+                            settData.region, 
+                            settData.district
+                        );
+                        
+                        if (coords) {
+                            const displayName = settlementName.includes('.') || 
+                                                settlementName.includes('г.') || 
+                                                settlementName.includes('с.') || 
+                                                settlementName.includes('д.') || 
+                                                settlementName.includes('пгт') 
+                                ? settlementName 
+                                : `с. ${settlementName}`;
+                            
+                            settlements.push({
+                                name: settlementName,
+                                displayName: displayName,
+                                district: settData.district,
+                                region: settData.region,
+                                lat: coords.lat,
+                                lng: coords.lng
+                            });
+                            
+                            // Обновляем фильтры и карту
+                            initDistrictFilters();
+                            renderMarkers();
+                        } else {
+                            console.warn(`Не удалось геокодировать: ${settlementName}`);
+                        }
                     }
                 });
             }
