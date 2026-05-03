@@ -371,6 +371,15 @@
             return text.toLowerCase()
                 .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
                 .replace(/[҃҄҅҆]/g, '')
+                .replace(/[ъь]$/, '')
+                .replace(/[ѣ]/g, 'е')
+                .replace(/[іѵї]/g, 'и')
+                .replace(/[ѡꙩ]/g, 'о')
+                .replace(/[ѧꙗ]/g, 'я')
+                .replace(/[ѳ]/g, 'ф')
+                .replace(/[ꙋѹоу]/g, 'у')
+                .replace(/[ѕꙁ]/g, 'з')
+                .replace(/[ꙑ]/g, 'ы')
                 .trim();
         }
         
@@ -391,6 +400,7 @@
         let columnOrder = [];
         let alignedData = null;
         let manuscriptTexts = {};
+        let filterModeOnlyDiffs = false;
         
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
@@ -525,6 +535,38 @@
         }
         
         // ============================================================
+        // ПОИСК НАЧАЛА ПРИТЧИ
+        // ============================================================
+        
+        function findParableStart(words) {
+            for (let i = 0; i < words.length - 3; i++) {
+                const w1 = normalizeText(words[i]);
+                const w2 = normalizeText(words[i+1]);
+                const w3 = normalizeText(words[i+2]);
+                
+                const isReche = w1.startsWith('р') && (w1.includes('еч') || w1.includes('ⷱ҇'));
+                const isGospod = w2.startsWith('г') && w2.length <= 5 && 
+                                (w2.includes('ь') || w2.includes('ъ') || w2.includes('˜') || w2.includes('҃') || w2.includes('꙯'));
+                const isPritch = w3.includes('прит');
+                
+                if (isReche && isGospod && isPritch) {
+                    console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
+                    return i;
+                }
+            }
+            
+            for (let i = 0; i < Math.min(50, words.length); i++) {
+                if (normalizeText(words[i]).includes('прит')) {
+                    console.log(`Найдено слово "притч" на позиции ${i}: "${words[i]}", начинаем с ${Math.max(0, i-2)}`);
+                    return Math.max(0, i - 2);
+                }
+            }
+            
+            console.log('Начало притчи не найдено, начинаем с первого слова');
+            return 0;
+        }
+        
+        // ============================================================
         // АЛГОРИТМЫ ВЫРАВНИВАНИЯ
         // ============================================================
         
@@ -590,92 +632,12 @@
         }
         
         function alignMultiple(mainWords, otherWordsArray) {
-            // Выравниваем каждый список попарно с главным
-            const pairwiseAlignments = [];
-            
+            const alignments = [];
             for (let ow of otherWordsArray) {
                 const [alignedMain, alignedOther] = needlemanWunsch(mainWords, ow);
-                pairwiseAlignments.push({
-                    main: alignedMain,
-                    other: alignedOther
-                });
+                alignments.push(alignedOther.map(w => ({ other: w })));
             }
-            
-            // Находим все позиции, где в главном тексте должны быть пропуски
-            const gapPositions = new Set();
-            for (let al of pairwiseAlignments) {
-                for (let pos = 0; pos < al.main.length; pos++) {
-                    if (al.main[pos] === '—') {
-                        gapPositions.add(pos);
-                    }
-                }
-            }
-            
-            // Сортируем позиции пропусков
-            const sortedGaps = Array.from(gapPositions).sort((a, b) => a - b);
-            
-            // Расширяем главный список, вставляя пропуски
-            const expandedMain = [];
-            let mainIdx = 0;
-            let gapIdx = 0;
-            
-            // Определяем максимальную длину выравнивания
-            const maxAlignedLen = Math.max(
-                mainWords.length + sortedGaps.length,
-                ...pairwiseAlignments.map(a => a.main.length)
-            );
-            
-            for (let pos = 0; pos < maxAlignedLen; pos++) {
-                if (gapIdx < sortedGaps.length && sortedGaps[gapIdx] === pos) {
-                    expandedMain.push('—');
-                    gapIdx++;
-                } else if (mainIdx < mainWords.length) {
-                    expandedMain.push(mainWords[mainIdx]);
-                    mainIdx++;
-                } else {
-                    expandedMain.push('—');
-                }
-            }
-            
-            // Выравниваем остальные списки по расширенному главному
-            const resultAlignments = pairwiseAlignments.map(al => {
-                const result = [];
-                let otherIdx = 0;
-                
-                for (let pos = 0; pos < expandedMain.length; pos++) {
-                    if (expandedMain[pos] === '—') {
-                        // В главном пропуск — в другом может быть слово
-                        if (otherIdx < al.other.length) {
-                            const word = al.other[otherIdx];
-                            // Проверяем, соответствует ли это пропуску в главном
-                            if (pos < al.main.length && al.main[pos] === '—') {
-                                result.push(word);
-                                otherIdx++;
-                            } else {
-                                // Нет соответствия — тоже пропуск
-                                result.push('—');
-                            }
-                        } else {
-                            result.push('—');
-                        }
-                    } else {
-                        // В главном слово
-                        if (otherIdx < al.other.length) {
-                            result.push(al.other[otherIdx]);
-                            otherIdx++;
-                        } else {
-                            result.push('—');
-                        }
-                    }
-                }
-                
-                return result;
-            });
-            
-            return {
-                mainWords: expandedMain,
-                alignments: resultAlignments.map(arr => arr.map(w => ({ other: w })))
-            };
+            return { mainWords, alignments };
         }
         
         function detectWordDiffType(mainWord, otherWord) {
@@ -741,91 +703,31 @@
             if (isNaN(mainIndex)) { alert('Выберите главный список'); return; }
             
             progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Подготовка текста...';
-            
-            // Ключевые слова для поиска начала притчи о блудном сыне
-            const anchorPatterns = [
-                ['рече', 'рече', 'рече'],  // все формы
-                ['господь', 'гь҃', 'г˜ь', 'г҃ь', 'г꙯ь'],
-                ['притъч', 'притьч', 'притъч']  // корень "притч"
-            ];
-            
-  // ==================== ФУНКЦИЯ ПОИСКА НАЧАЛА ПРИТЧИ ====================
-
-        function findParableStart(words) {
-            // Ищем последовательность: слово похожее на "рече" + слово похожее на "господь" + слово содержащее "притч"
-            for (let i = 0; i < words.length - 3; i++) {
-                const w1 = normalizeText(words[i]);
-                const w2 = normalizeText(words[i+1]);
-                const w3 = normalizeText(words[i+2]);
-                
-                // Проверяем "рече" (разные формы: реч, речⷱ҇е, рⷱ҇е)
-                const isReche = w1.startsWith('р') && (w1.includes('еч') || w1.includes('ⷱ҇'));
-                
-                // Проверяем "господь" (г˜ь, г҃ь, г꙯ь, гь҃)
-                const isGospod = w2.startsWith('г') && w2.length <= 5 && 
-                                (w2.includes('ь') || w2.includes('ъ') || w2.includes('˜') || w2.includes('҃') || w2.includes('꙯'));
-                
-                // Проверяем "притч" (притъч, притьч, притч)
-                const isPritch = w3.includes('прит');
-                
-                if (isReche && isGospod && isPritch) {
-                    console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
-                    return i;
-                }
-            }
-            
-            // Если не нашли строгую последовательность, ищем просто "притч" в районе первых 50 слов
-            for (let i = 0; i < Math.min(50, words.length); i++) {
-                if (normalizeText(words[i]).includes('прит')) {
-                    console.log(`Найдено слово "притч" на позиции ${i}: "${words[i]}", начинаем с ${Math.max(0, i-2)}`);
-                    return Math.max(0, i - 2); // Отступаем на 2 слова назад (рече, господь)
-                }
-            }
-            
-            console.log('Начало притчи не найдено, начинаем с первого слова');
-            return 0;
-        }
-        
-        // ==================== ОБРАБОТЧИК КНОПКИ ВЫРАВНИВАНИЯ ====================
-        
-        alignBtn.addEventListener('click', () => {
-            if (uploadedFiles.length < 2) return;
-            const mainIndex = parseInt(mainMsSelect.value);
-            if (isNaN(mainIndex)) { alert('Выберите главный список'); return; }
-            
-            progressDiv.style.display = 'block';
             progressDiv.innerHTML = '⏳ Поиск начала притчи...';
             
-            // Используем setTimeout чтобы дать браузеру обновить UI
             setTimeout(() => {
                 try {
-                    // Получаем главный список
                     const mainMs = manuscripts[mainIndex];
-                    let mainWords = [...mainMs.data.words]; // Копируем массив
+                    let mainWords = [...mainMs.data.words];
                     
-                    // Находим начало притчи в главном списке
                     const mainStart = findParableStart(mainWords);
                     mainWords = mainWords.slice(mainStart);
                     
-                    console.log(`Главный список (${mainMs.name}): начинаем с позиции ${mainStart}, первых 5 слов:`, mainWords.slice(0, 5));
+                    console.log(`Главный список (${mainMs.name}): начало с позиции ${mainStart}`);
                     
                     const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
                     
                     progressDiv.innerHTML = '⏳ Подготовка остальных списков...';
                     
-                    // Собираем слова из остальных списков, тоже с начала притчи
                     const otherWordsArray = otherMss.map(ms => {
-                        let words = [...ms.data.words]; // Копируем массив
+                        let words = [...ms.data.words];
                         const start = findParableStart(words);
-                        const sliced = words.slice(start);
-                        console.log(`${ms.name}: начинаем с позиции ${start}, первых 5 слов:`, sliced.slice(0, 5));
-                        return sliced;
+                        console.log(`${ms.name}: начало с позиции ${start}`);
+                        return words.slice(start);
                     });
                     
                     progressDiv.innerHTML = '⏳ Множественное выравнивание...';
                     
-                    // Множественное выравнивание
                     const result = alignMultiple(mainWords, otherWordsArray);
                     
                     alignedData = {
@@ -839,30 +741,24 @@
                     renderWordAlignmentTable();
                     exportBtn.disabled = false;
                     
-                    console.log('=== ВЫРАВНИВАНИЕ ЗАВЕРШЕНО ===');
-                    console.log('Всего строк:', result.mainWords.length);
-                    console.log('Первые 10 слов главного списка:', result.mainWords.slice(0, 10));
-                    
                 } catch (err) {
                     progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
                     console.error('Ошибка выравнивания:', err);
                 }
             }, 100);
         });
+        
         // ============================================================
         // ОТРИСОВКА ТАБЛИЦЫ
         // ============================================================
         
         function renderWordAlignmentTable() {
             const container = document.getElementById('alignmentResult');
-            const startSheet = folioStart.value || '?';
-            const endSheet = folioEnd.value || '?';
             if (!alignedData) return;
             
             initColumnOrder();
             
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Пословное выравнивание</h3>';
-            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Слов в главном списке: ${alignedData.mainWords.length}</p>`;
             html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
             
@@ -954,7 +850,7 @@
             container.innerHTML = html;
             setupDragAndDrop();
             applyColumnVisibility();
-            applyDiffHighlights();
+            applyRowFiltering();
             makeEditable();
         }
         
@@ -978,8 +874,6 @@
                 html += `<div class="diff-filter-item" onclick="toggleDiffType('${f.id}')"><input type="checkbox" id="diff_${f.id}" ${checked}><span class="color-badge" style="background: ${f.color};"></span><label for="diff_${f.id}">${f.name}</label></div>`;
             });
             html += '</div>';
-            
-            // Добавляем переключатель режима
             html += '<div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">';
             html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px;">✓ Выбрать все</button>';
             html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
@@ -987,26 +881,20 @@
             html += '<input type="checkbox" id="filterModeCheckbox" onchange="toggleFilterMode()">';
             html += '<span style="font-size: 13px; color: #4a3d2c;">🔍 Показывать только строки с разночтениями</span>';
             html += '</label>';
-            html += '</div>';
-            
-            html += '</div>';
+            html += '</div></div>';
             return html;
         }
-
         
         window.toggleDiffType = function(type) {
             const checkbox = document.getElementById(`diff_${type}`);
             if (checkbox) {
                 diffTypesEnabled[type] = checkbox.checked;
-                
-                // Если сняли все галочки — выключаем режим фильтрации
                 const anyChecked = Object.values(diffTypesEnabled).some(v => v);
                 if (!anyChecked && filterModeOnlyDiffs) {
                     filterModeOnlyDiffs = false;
                     const filterCheckbox = document.getElementById('filterModeCheckbox');
                     if (filterCheckbox) filterCheckbox.checked = false;
                 }
-                
                 applyRowFiltering();
             }
         };
@@ -1020,49 +908,31 @@
         window.deselectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
-            // Выключаем режим фильтрации
             filterModeOnlyDiffs = false;
             const filterCheckbox = document.getElementById('filterModeCheckbox');
             if (filterCheckbox) filterCheckbox.checked = false;
             applyRowFiltering();
         };
-
-        // Режим фильтрации: true = показывать только строки с разночтениями, false = показывать все
-        let filterModeOnlyDiffs = false;
         
         window.toggleFilterMode = function() {
             filterModeOnlyDiffs = document.getElementById('filterModeCheckbox').checked;
             applyRowFiltering();
         };
         
-        // Проверяет, есть ли в строке хотя бы один включенный тип разночтения
         function rowHasEnabledDiffType(rowIndex) {
             if (!alignedData) return true;
-            
             const mainWord = alignedData.mainWords[rowIndex];
-            let hasDiff = false;
-            
             for (let j = 0; j < alignedData.alignments.length; j++) {
-                const alignment = alignedData.alignments[j];
-                const pair = alignment[rowIndex];
+                const pair = alignedData.alignments[j][rowIndex];
                 if (!pair) continue;
-                
-                const otherWord = pair.other || '—';
-                const diffType = detectWordDiffType(mainWord, otherWord);
-                
-                if (diffType && diffTypesEnabled[diffType]) {
-                    hasDiff = true;
-                    break;
-                }
+                const diffType = detectWordDiffType(mainWord, pair.other || '—');
+                if (diffType && diffTypesEnabled[diffType]) return true;
             }
-            
-            return hasDiff;
+            return false;
         }
         
-        // Применяет фильтрацию строк и подсветку
         function applyRowFiltering() {
             if (!alignedData) return;
-            
             const rows = document.querySelectorAll('.alignment-table tbody tr');
             
             for (let i = 0; i < alignedData.mainWords.length; i++) {
@@ -1072,71 +942,43 @@
                 const mainWord = alignedData.mainWords[i];
                 let hasVisibleDiff = false;
                 
-                // Сначала применяем подсветку к ячейкам
                 const cells = row.querySelectorAll('td.verse-text');
                 cells.forEach(cell => {
                     const colIdx = parseInt(cell.dataset.col);
-                    if (colIdx === 0) return; // Главный список не трогаем
+                    if (colIdx === 0) return;
                     
                     const listIdx = colIdx - 1;
-                    const alignment = alignedData.alignments[listIdx];
-                    const pair = alignment[i];
+                    const pair = alignedData.alignments[listIdx][i];
                     if (!pair) return;
                     
-                    const otherWord = pair.other || '—';
-                    const diffType = detectWordDiffType(mainWord, otherWord);
-                    
-                    // Очищаем классы
+                    const diffType = detectWordDiffType(mainWord, pair.other || '—');
                     cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax', 'diff-insertion', 'diff-deletion');
                     
-                    if (diffType) {
-                        // Подсвечиваем только если тип включен
-                        if (diffTypesEnabled[diffType]) {
-                            cell.classList.add(getDiffClass(diffType));
-                            hasVisibleDiff = true;
-                        }
+                    if (diffType && diffTypesEnabled[diffType]) {
+                        cell.classList.add(getDiffClass(diffType));
+                        hasVisibleDiff = true;
                     }
                 });
                 
-                // Скрываем или показываем строку
-                if (filterModeOnlyDiffs) {
-                    // В режиме фильтрации показываем только строки с разночтениями
-                    row.style.display = hasVisibleDiff ? '' : 'none';
-                } else {
-                    // В обычном режиме показываем все
-                    row.style.display = '';
-                }
+                row.style.display = (filterModeOnlyDiffs && !hasVisibleDiff) ? 'none' : '';
             }
             
-            // Обновляем счетчик видимых строк
-            updateVisibleRowsCount();
-        }
-        
-        // Счетчик видимых строк
-        function updateVisibleRowsCount() {
-            if (!filterModeOnlyDiffs) return;
-            
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            let visibleCount = 0;
-            rows.forEach(row => {
-                if (row.style.display !== 'none') visibleCount++;
-            });
-            
-            // Добавляем информацию о количестве
+            // Обновляем счетчик
             let counterEl = document.getElementById('visibleRowsCounter');
-            if (!counterEl) {
-                counterEl = document.createElement('div');
-                counterEl.id = 'visibleRowsCounter';
-                counterEl.style.cssText = 'margin: 8px 0; padding: 8px 12px; background: #e8ddd0; border-radius: 8px; font-size: 13px; color: #3e3225;';
-                const table = document.querySelector('.alignment-table');
-                if (table) table.parentNode.insertBefore(counterEl, table);
-            }
-            counterEl.textContent = `🔍 Показано ${visibleCount} из ${alignedData.mainWords.length} строк (с выбранными типами разночтений)`;
-            
-            if (!filterModeOnlyDiffs) {
-                if (counterEl) counterEl.style.display = 'none';
+            if (filterModeOnlyDiffs) {
+                if (!counterEl) {
+                    counterEl = document.createElement('div');
+                    counterEl.id = 'visibleRowsCounter';
+                    counterEl.style.cssText = 'margin: 8px 0; padding: 8px 12px; background: #e8ddd0; border-radius: 8px; font-size: 13px; color: #3e3225;';
+                    const table = document.querySelector('.alignment-table');
+                    if (table && table.parentNode) table.parentNode.insertBefore(counterEl, table);
+                }
+                let visibleCount = 0;
+                rows.forEach(r => { if (r.style.display !== 'none') visibleCount++; });
+                counterEl.textContent = `🔍 Показано ${visibleCount} из ${alignedData.mainWords.length} строк`;
+                counterEl.style.display = '';
             } else {
-                if (counterEl) counterEl.style.display = '';
+                if (counterEl) counterEl.style.display = 'none';
             }
         }
         
@@ -1200,7 +1042,6 @@
         };
         
         function applyDiffHighlights() {
-            // Теперь используем новую функцию, которая и подсвечивает и фильтрует
             applyRowFiltering();
         }
         
@@ -1280,8 +1121,7 @@
             const cells = row.querySelectorAll('td');
             const mainWord = alignedData.mainWords[rowIdx];
             const listIdx = colIdx - 1;
-            const alignment = alignedData.alignments[listIdx];
-            const pair = alignment[rowIdx];
+            const pair = alignedData.alignments[listIdx][rowIdx];
             if (!pair) return;
             const otherWord = pair.other || '—';
             const diffType = detectWordDiffType(mainWord, otherWord);
@@ -1294,7 +1134,7 @@
             if (typeCell) {
                 typeCell.innerHTML = diffType ? `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>` : '✓';
             }
-            applyDiffHighlights();
+            applyRowFiltering();
         }
         
         function updateAlignedDataFromTable() {
@@ -1366,7 +1206,6 @@
             const session = {
                 files: uploadedFiles.map(f => f.name),
                 aligned: alignedData,
-                sheets: { start: folioStart.value, end: folioEnd.value },
                 columnVisibility: columnVisibility,
                 columnOrder: columnOrder,
                 diffTypesEnabled: diffTypesEnabled,
@@ -1380,8 +1219,6 @@
             const saved = localStorage.getItem('corpusSession');
             if (saved) {
                 const session = JSON.parse(saved);
-                folioStart.value = session.sheets.start;
-                folioEnd.value = session.sheets.end;
                 if (session.columnVisibility) columnVisibility = session.columnVisibility;
                 if (session.columnOrder) columnOrder = session.columnOrder;
                 if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;
