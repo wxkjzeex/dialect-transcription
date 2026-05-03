@@ -750,68 +750,105 @@
                 ['притъч', 'притьч', 'притъч']  // корень "притч"
             ];
             
-            // Функция поиска начала притчи в списке слов
-            function findParableStart(words) {
-                // Ищем последовательность: слово похожее на "рече" + слово похожее на "господь" + слово содержащее "притч"
-                for (let i = 0; i < words.length - 3; i++) {
-                    const w1 = normalizeText(words[i]);
-                    const w2 = normalizeText(words[i+1]);
-                    const w3 = normalizeText(words[i+2]);
-                    
-                    const isReche = w1.includes('реч') || w1 === 'рече' || w1 === 'реч';
-                    const isGospod = w2.includes('г') && (w2.includes('ь') || w2.includes('ъ')) && w2.length <= 4;
-                    const isPritch = w3.includes('прит') || w3.includes('прить');
-                    
-                    if (isReche && isGospod && isPritch) {
-                        console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
-                        return i;
-                    }
+  // ==================== ФУНКЦИЯ ПОИСКА НАЧАЛА ПРИТЧИ ====================
+
+        function findParableStart(words) {
+            // Ищем последовательность: слово похожее на "рече" + слово похожее на "господь" + слово содержащее "притч"
+            for (let i = 0; i < words.length - 3; i++) {
+                const w1 = normalizeText(words[i]);
+                const w2 = normalizeText(words[i+1]);
+                const w3 = normalizeText(words[i+2]);
+                
+                // Проверяем "рече" (разные формы: реч, речⷱ҇е, рⷱ҇е)
+                const isReche = w1.startsWith('р') && (w1.includes('еч') || w1.includes('ⷱ҇'));
+                
+                // Проверяем "господь" (г˜ь, г҃ь, г꙯ь, гь҃)
+                const isGospod = w2.startsWith('г') && w2.length <= 5 && 
+                                (w2.includes('ь') || w2.includes('ъ') || w2.includes('˜') || w2.includes('҃') || w2.includes('꙯'));
+                
+                // Проверяем "притч" (притъч, притьч, притч)
+                const isPritch = w3.includes('прит');
+                
+                if (isReche && isGospod && isPritch) {
+                    console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
+                    return i;
                 }
-                // Если не нашли — берем с начала
-                console.log('Начало притчи не найдено, начинаем с первого слова');
-                return 0;
             }
             
-            // Получаем слова главного списка
-            let mainWords = mainMs.data.words;
+            // Если не нашли строгую последовательность, ищем просто "притч" в районе первых 50 слов
+            for (let i = 0; i < Math.min(50, words.length); i++) {
+                if (normalizeText(words[i]).includes('прит')) {
+                    console.log(`Найдено слово "притч" на позиции ${i}: "${words[i]}", начинаем с ${Math.max(0, i-2)}`);
+                    return Math.max(0, i - 2); // Отступаем на 2 слова назад (рече, господь)
+                }
+            }
             
-            // Находим начало притчи в главном списке
-            const mainStart = findParableStart(mainWords);
-            mainWords = mainWords.slice(mainStart);
-            
-            console.log(`Главный список: начинаем с позиции ${mainStart}, слово "${mainWords[0]}"`);
-            
-            const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
-            
-            progressDiv.innerHTML = '⏳ Множественное выравнивание...';
-            
-            // Собираем слова из остальных списков, тоже с начала притчи
-            const otherWordsArray = otherMss.map(ms => {
-                let words = ms.data.words;
-                const start = findParableStart(words);
-                console.log(`${ms.name}: начинаем с позиции ${start}, слово "${words[start]}"`);
-                return words.slice(start);
-            });
-            
-            // Множественное выравнивание
-            const result = alignMultiple(mainWords, otherWordsArray);
-            
-            alignedData = {
-                main: mainMs.name,
-                aligned: otherMss.map(m => m.name),
-                mainWords: result.mainWords,
-                alignments: result.alignments
-            };
-            
-            progressDiv.style.display = 'none';
-            renderWordAlignmentTable();
-            exportBtn.disabled = false;
-            
-            console.log('=== РЕЗУЛЬТАТ ===');
-            console.log('Первые 10 слов главного списка:', result.mainWords.slice(0, 10));
-            console.log('Общее количество строк:', result.mainWords.length);
-        });
+            console.log('Начало притчи не найдено, начинаем с первого слова');
+            return 0;
+        }
         
+        // ==================== ОБРАБОТЧИК КНОПКИ ВЫРАВНИВАНИЯ ====================
+        
+        alignBtn.addEventListener('click', () => {
+            if (uploadedFiles.length < 2) return;
+            const mainIndex = parseInt(mainMsSelect.value);
+            if (isNaN(mainIndex)) { alert('Выберите главный список'); return; }
+            
+            progressDiv.style.display = 'block';
+            progressDiv.innerHTML = '⏳ Поиск начала притчи...';
+            
+            // Используем setTimeout чтобы дать браузеру обновить UI
+            setTimeout(() => {
+                try {
+                    // Получаем главный список
+                    const mainMs = manuscripts[mainIndex];
+                    let mainWords = [...mainMs.data.words]; // Копируем массив
+                    
+                    // Находим начало притчи в главном списке
+                    const mainStart = findParableStart(mainWords);
+                    mainWords = mainWords.slice(mainStart);
+                    
+                    console.log(`Главный список (${mainMs.name}): начинаем с позиции ${mainStart}, первых 5 слов:`, mainWords.slice(0, 5));
+                    
+                    const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
+                    
+                    progressDiv.innerHTML = '⏳ Подготовка остальных списков...';
+                    
+                    // Собираем слова из остальных списков, тоже с начала притчи
+                    const otherWordsArray = otherMss.map(ms => {
+                        let words = [...ms.data.words]; // Копируем массив
+                        const start = findParableStart(words);
+                        const sliced = words.slice(start);
+                        console.log(`${ms.name}: начинаем с позиции ${start}, первых 5 слов:`, sliced.slice(0, 5));
+                        return sliced;
+                    });
+                    
+                    progressDiv.innerHTML = '⏳ Множественное выравнивание...';
+                    
+                    // Множественное выравнивание
+                    const result = alignMultiple(mainWords, otherWordsArray);
+                    
+                    alignedData = {
+                        main: mainMs.name,
+                        aligned: otherMss.map(m => m.name),
+                        mainWords: result.mainWords,
+                        alignments: result.alignments
+                    };
+                    
+                    progressDiv.style.display = 'none';
+                    renderWordAlignmentTable();
+                    exportBtn.disabled = false;
+                    
+                    console.log('=== ВЫРАВНИВАНИЕ ЗАВЕРШЕНО ===');
+                    console.log('Всего строк:', result.mainWords.length);
+                    console.log('Первые 10 слов главного списка:', result.mainWords.slice(0, 10));
+                    
+                } catch (err) {
+                    progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
+                    console.error('Ошибка выравнивания:', err);
+                }
+            }, 100);
+        });
         // ============================================================
         // ОТРИСОВКА ТАБЛИЦЫ
         // ============================================================
