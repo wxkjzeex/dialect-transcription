@@ -6,8 +6,26 @@
     <title>Параллельный корпус · Притча о блудном сыне</title>
     <style>
         /* ==================== ПОДКЛЮЧЕНИЕ ШРИФТОВ ==================== */
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600&display=swap');
+        @font-face {
+            font-family: 'Menaion Unicode';
+            src: url('https://raw.githubusercontent.com/wxkjzeex/dialect-transcription/main/static/fonts/Menaion_Unicode.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Menaion UNIPUA';
+            src: url('https://raw.githubusercontent.com/wxkjzeex/dialect-transcription/main/static/fonts/Menaion_UNIPUA.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        /* Применяем шрифты к таблице */
+        .alignment-table td {
+            font-family: 'Menaion Unicode', 'Menaion UNIPUA', 'Noto Serif', 'Times New Roman', serif !important;
+        }
+        .verse-text textarea {
+            font-family: 'Menaion Unicode', 'Menaion UNIPUA', 'Noto Serif', 'Times New Roman', serif !important;
+        }
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -572,12 +590,92 @@
         }
         
         function alignMultiple(mainWords, otherWordsArray) {
-            const alignments = [];
+            // Выравниваем каждый список попарно с главным
+            const pairwiseAlignments = [];
+            
             for (let ow of otherWordsArray) {
                 const [alignedMain, alignedOther] = needlemanWunsch(mainWords, ow);
-                alignments.push(alignedOther.map(w => ({ other: w })));
+                pairwiseAlignments.push({
+                    main: alignedMain,
+                    other: alignedOther
+                });
             }
-            return { mainWords, alignments };
+            
+            // Находим все позиции, где в главном тексте должны быть пропуски
+            const gapPositions = new Set();
+            for (let al of pairwiseAlignments) {
+                for (let pos = 0; pos < al.main.length; pos++) {
+                    if (al.main[pos] === '—') {
+                        gapPositions.add(pos);
+                    }
+                }
+            }
+            
+            // Сортируем позиции пропусков
+            const sortedGaps = Array.from(gapPositions).sort((a, b) => a - b);
+            
+            // Расширяем главный список, вставляя пропуски
+            const expandedMain = [];
+            let mainIdx = 0;
+            let gapIdx = 0;
+            
+            // Определяем максимальную длину выравнивания
+            const maxAlignedLen = Math.max(
+                mainWords.length + sortedGaps.length,
+                ...pairwiseAlignments.map(a => a.main.length)
+            );
+            
+            for (let pos = 0; pos < maxAlignedLen; pos++) {
+                if (gapIdx < sortedGaps.length && sortedGaps[gapIdx] === pos) {
+                    expandedMain.push('—');
+                    gapIdx++;
+                } else if (mainIdx < mainWords.length) {
+                    expandedMain.push(mainWords[mainIdx]);
+                    mainIdx++;
+                } else {
+                    expandedMain.push('—');
+                }
+            }
+            
+            // Выравниваем остальные списки по расширенному главному
+            const resultAlignments = pairwiseAlignments.map(al => {
+                const result = [];
+                let otherIdx = 0;
+                
+                for (let pos = 0; pos < expandedMain.length; pos++) {
+                    if (expandedMain[pos] === '—') {
+                        // В главном пропуск — в другом может быть слово
+                        if (otherIdx < al.other.length) {
+                            const word = al.other[otherIdx];
+                            // Проверяем, соответствует ли это пропуску в главном
+                            if (pos < al.main.length && al.main[pos] === '—') {
+                                result.push(word);
+                                otherIdx++;
+                            } else {
+                                // Нет соответствия — тоже пропуск
+                                result.push('—');
+                            }
+                        } else {
+                            result.push('—');
+                        }
+                    } else {
+                        // В главном слово
+                        if (otherIdx < al.other.length) {
+                            result.push(al.other[otherIdx]);
+                            otherIdx++;
+                        } else {
+                            result.push('—');
+                        }
+                    }
+                }
+                
+                return result;
+            });
+            
+            return {
+                mainWords: expandedMain,
+                alignments: resultAlignments.map(arr => arr.map(w => ({ other: w })))
+            };
         }
         
         function detectWordDiffType(mainWord, otherWord) {
@@ -651,7 +749,14 @@
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
             
             progressDiv.innerHTML = '⏳ Множественное выравнивание...';
-            const otherWordsArray = otherMss.map(ms => ms.data.fullText.split(/\s+/).filter(w => w.length > 0));
+            
+            // Собираем слова из остальных списков
+            const otherWordsArray = otherMss.map(ms => {
+                const text = ms.data.fullText;
+                return text.split(/\s+/).filter(w => w.length > 0);
+            });
+            
+            // Множественное выравнивание
             const result = alignMultiple(mainWords, otherWordsArray);
             
             alignedData = {
@@ -664,6 +769,12 @@
             progressDiv.style.display = 'none';
             renderWordAlignmentTable();
             exportBtn.disabled = false;
+            
+            // Выводим диагностику
+            console.log('Главных слов изначально:', mainWords.length);
+            console.log('Главных слов после выравнивания:', result.mainWords.length);
+            console.log('Пропусков в главном:', result.mainWords.filter(w => w === '—').length);
+            console.log('Пример первых 20 слов:', result.mainWords.slice(0, 20));
         });
         
         // ============================================================
