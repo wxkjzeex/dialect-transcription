@@ -787,7 +787,12 @@
         function detectWordDiffType(mainWord, otherWord) {
             if (!mainWord || !otherWord) return null;
             if (mainWord === otherWord) return null;
-            if (mainWord === '—' || otherWord === '—') return 'insertion';
+            
+            // Главное слово есть, другое пропущено — это удаление (не красим)
+            if (otherWord === '—') return null;  // <-- ИЗМЕНИТЬ: не считать удаление разночтением
+            
+            // Главное слово пропущено, другое есть — это вставка
+            if (mainWord === '—') return 'insertion';
             
             const nm = normalizeText(mainWord);
             const no = normalizeText(otherWord);
@@ -829,7 +834,8 @@
                 'phonetic': 0,
                 'morph': 0,
                 'lexical': 0,
-                'match': 0
+                'match': 0,
+                'insertion': 0  // <-- ДОБАВИТЬ
             };
             
             if (!alignedData) return stats;
@@ -926,7 +932,8 @@
                 'phonetic': 'Фонетические',
                 'morph': 'Морфологические',
                 'lexical': 'Лексические',
-                'match': 'Совпадения'
+                'match': 'Совпадения',
+                'insertion': 'Вставки/Пропуски'
             };
             
             Object.entries(stats).forEach(([type, count]) => {
@@ -1207,7 +1214,7 @@
                 
                 cells.forEach((cell, cellIdx) => {
                     const colIdx = parseInt(cell.dataset.col);
-                    if (colIdx === 0) return;
+                    if (colIdx === 0) return; // Главный список не подсвечиваем
                     
                     const listIdx = colIdx - 1;
                     const alignment = alignedData.alignments[listIdx];
@@ -1216,11 +1223,12 @@
                     
                     const otherWord = pair.other || '—';
                     
-                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax', 'diff-insertion');
                     
                     const diffType = detectWordDiffType(mainWord, otherWord);
                     
-                    if (diffType && diffTypesEnabled[diffType]) {
+                    // Не подсвечиваем, если это пропуск (insertion)
+                    if (diffType && diffType !== 'insertion' && diffTypesEnabled[diffType]) {
                         cell.classList.add(getDiffClass(diffType));
                     }
                 });
