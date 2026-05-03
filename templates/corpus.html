@@ -366,27 +366,16 @@
             return div.innerHTML;
         }
         
-        function normalizeText(text) {
-            if (!text) return '';
-            return text.toLowerCase()
-                .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
-                .replace(/[҃҄҅҆]/g, '')
-                .replace(/[ъь]$/, '')
-                .replace(/[ѣ]/g, 'е')
-                .replace(/[іѵї]/g, 'и')
-                .replace(/[ѡꙩ]/g, 'о')
-                .replace(/[ѧꙗ]/g, 'я')
-                .replace(/[ѳ]/g, 'ф')
-                .replace(/[ꙋѹоу]/g, 'у')
-                .replace(/[ѕꙁ]/g, 'з')
-                .replace(/[ꙑ]/g, 'ы')
-                .trim();
-        }
-        
         // ============================================================
         // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
         // ============================================================
         
+        let uploadedFiles = [];
+        let manuscripts = [];
+        let manuscriptTexts = {};
+        let columnVisibility = [];
+        let columnOrder = [];
+        let alignedData = null;
         let diffTypesEnabled = {
             graphic: true,
             phonetic: true,
@@ -394,13 +383,7 @@
             lexical: true,
             syntax: true
         };
-        let uploadedFiles = [];
-        let manuscripts = [];
-        let columnVisibility = [];
-        let columnOrder = [];
-        let alignedData = null;
-        let manuscriptTexts = {};
-        let filterModeOnlyDiffs = false;
+        let dragSourceIndex = null;
         
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
@@ -438,18 +421,23 @@
         function extractTextFromXML(xmlString) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(xmlString, 'application/xml');
+            
             const words = [];
             const sheets = [];
             
             const allElements = doc.querySelectorAll('*');
+            
             for (let el of allElements) {
                 if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
                     const n = el.getAttribute('n');
                     if (n) {
-                        const sn = parseInt(n);
-                        if (!isNaN(sn)) sheets.push({ index: words.length, sheet: sn });
+                        const currentSheet = parseInt(n);
+                        if (!isNaN(currentSheet)) {
+                            sheets.push({ index: words.length, sheet: currentSheet });
+                        }
                     }
                 }
+                
                 if (el.tagName === 'w' || el.tagName === 'pc') {
                     const t = el.textContent.trim();
                     if (t && !['·', '⸱', '※', '∽', ':', '.', '⁘'].includes(t)) {
@@ -458,17 +446,32 @@
                 }
             }
             
-            return { fullText: words.join(' '), words: words, sheets: sheets };
+            return {
+                fullText: words.join(' '),
+                words: words,
+                sheets: sheets
+            };
         }
         
         function filterTextBySheets(data, startSheet, endSheet) {
             if (!startSheet || !endSheet) return data.fullText;
-            const start = parseInt(startSheet), end = parseInt(endSheet);
-            let startIdx = 0, endIdx = data.words.length;
+            
+            const start = parseInt(startSheet);
+            const end = parseInt(endSheet);
+            
+            let startIdx = 0;
+            let endIdx = data.words.length;
+            
             for (let sheet of data.sheets) {
-                if (sheet.sheet === start) startIdx = sheet.index;
-                if (sheet.sheet === end + 1) { endIdx = sheet.index; break; }
+                if (sheet.sheet === start) {
+                    startIdx = sheet.index;
+                }
+                if (sheet.sheet === end + 1) {
+                    endIdx = sheet.index;
+                    break;
+                }
             }
+            
             return data.words.slice(startIdx, endIdx).join(' ');
         }
         
@@ -484,38 +487,60 @@
                 progressDiv.style.display = 'block';
                 progressDiv.className = 'progress';
                 progressDiv.innerHTML = '⏳ Парсинг XML-файлов...';
+                
                 manuscripts = [];
                 
                 for (let i = 0; i < uploadedFiles.length; i++) {
                     const file = uploadedFiles[i];
                     progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
+                    
                     try {
                         const xmlText = await file.text();
                         const extracted = extractTextFromXML(xmlText);
-                        manuscripts.push({ name: file.name, data: extracted });
+                        
+                        manuscripts.push({
+                            name: file.name,
+                            data: extracted,
+                        });
+                        
                         manuscriptTexts[file.name] = extracted.fullText;
+                        
                     } catch (err) {
                         console.error('Ошибка парсинга:', file.name, err);
-                        manuscripts.push({ name: file.name, data: { fullText: '[Ошибка парсинга]', words: [], sheets: [] } });
+                        manuscripts.push({
+                            name: file.name,
+                            data: { fullText: '[Ошибка парсинга]', words: [], sheets: [] }
+                        });
                     }
                 }
                 
                 progressDiv.innerHTML = '✅ Парсинг завершён!';
                 setTimeout(() => { progressDiv.style.display = 'none'; }, 1500);
             }
+            
             updateUI();
         }
         
         function renderFileList() {
-            if (uploadedFiles.length === 0) { fileList.innerHTML = ''; return; }
+            if (uploadedFiles.length === 0) {
+                fileList.innerHTML = '';
+                return;
+            }
             let html = '<h3 style="margin-bottom: 12px; color: #3e3225;">Загруженные списки:</h3>';
             uploadedFiles.forEach((file, index) => {
-                html += `<div class="file-item"><span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span><span class="file-remove" onclick="removeFile(${index})">✕</span></div>`;
+                html += `
+                    <div class="file-item">
+                        <span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+                        <span class="file-remove" onclick="removeFile(${index})">✕</span>
+                    </div>
+                `;
             });
             fileList.innerHTML = html;
             
             let options = '<option value="">Выберите главный список</option>';
-            uploadedFiles.forEach((file, index) => { options += `<option value="${index}">${file.name}</option>`; });
+            uploadedFiles.forEach((file, index) => {
+                options += `<option value="${index}">${file.name}</option>`;
+            });
             mainMsSelect.innerHTML = options;
         }
         
@@ -535,109 +560,153 @@
         }
         
         // ============================================================
-        // ПОИСК НАЧАЛА ПРИТЧИ
-        // ============================================================
-        
-        function findParableStart(words) {
-            for (let i = 0; i < words.length - 3; i++) {
-                const w1 = normalizeText(words[i]);
-                const w2 = normalizeText(words[i+1]);
-                const w3 = normalizeText(words[i+2]);
-                
-                const isReche = w1.startsWith('р') && (w1.includes('еч') || w1.includes('ⷱ҇'));
-                const isGospod = w2.startsWith('г') && w2.length <= 5 && 
-                                (w2.includes('ь') || w2.includes('ъ') || w2.includes('˜') || w2.includes('҃') || w2.includes('꙯'));
-                const isPritch = w3.includes('прит');
-                
-                if (isReche && isGospod && isPritch) {
-                    console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
-                    return i;
-                }
-            }
-            
-            for (let i = 0; i < Math.min(50, words.length); i++) {
-                if (normalizeText(words[i]).includes('прит')) {
-                    console.log(`Найдено слово "притч" на позиции ${i}: "${words[i]}", начинаем с ${Math.max(0, i-2)}`);
-                    return Math.max(0, i - 2);
-                }
-            }
-            
-            console.log('Начало притчи не найдено, начинаем с первого слова');
-            return 0;
-        }
-        
-        // ============================================================
         // АЛГОРИТМЫ ВЫРАВНИВАНИЯ
         // ============================================================
         
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toLowerCase()
+                .replace(/[·⸱※∽⁘:.,;!?]/g, '')
+                .replace(/[҃҄҅҆]/g, '')
+                .replace(/[ъь]$/, '')
+                .replace(/[ѣ]/g, 'е')
+                .replace(/[іѵї]/g, 'и')
+                .replace(/[ѡꙩ]/g, 'о')
+                .replace(/[ѧꙗ]/g, 'я')
+                .replace(/[ѳ]/g, 'ф')
+                .replace(/[ꙋѹоу]/g, 'у')
+                .replace(/[ѕ]/g, 'з')
+                .replace(/[ꙁ]/g, 'з')
+                .replace(/[ꙑ]/g, 'ы')
+                .trim();
+        }
+        
         function levenshtein(a, b) {
-            const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+            const dp = Array.from({ length: a.length + 1 }, () =>
+                Array(b.length + 1).fill(0)
+            );
+        
             for (let i = 0; i <= a.length; i++) dp[i][0] = i;
             for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-            for (let i = 1; i <= a.length; i++)
-                for (let j = 1; j <= b.length; j++)
-                    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+        
+            for (let i = 1; i <= a.length; i++) {
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                    dp[i][j] = Math.min(
+                        dp[i - 1][j] + 1,
+                        dp[i][j - 1] + 1,
+                        dp[i - 1][j - 1] + cost
+                    );
+                }
+            }
+        
             return dp[a.length][b.length];
         }
         
         function similarity(a, b) {
-            const MATCH = 6, PARTIAL = 2, MISMATCH = -4;
-            const na = normalizeText(a), nb = normalizeText(b);
+            const MATCH = 6;
+            const PARTIAL = 2;
+            const MISMATCH = -4;
+        
+            const na = normalizeText(a);
+            const nb = normalizeText(b);
+        
             if (!na && !nb) return 0;
             if (na === nb) return MATCH;
+        
             const anchors = ['и','же','въ','не','на','къ','съ','от','за','яко'];
-            if (anchors.includes(na) && anchors.includes(nb)) return MATCH;
+            if (anchors.includes(na) && anchors.includes(nb)) {
+                return MATCH;
+            }
+        
             const dist = levenshtein(na, nb);
             const maxLen = Math.max(na.length, nb.length);
+        
             if (maxLen === 0) return 0;
+        
             const ratio = dist / maxLen;
+        
             if (ratio < 0.25) return PARTIAL;
             if (ratio < 0.5) return 0;
+        
             return MISMATCH;
         }
         
         function needlemanWunsch(seq1, seq2) {
             const GAP = -6;
-            const n = seq1.length, m = seq2.length;
-            const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
-            const trace = Array.from({ length: n + 1 }, () => Array(m + 1).fill(null));
-            
-            for (let i = 1; i <= n; i++) { dp[i][0] = i * GAP; trace[i][0] = 'up'; }
-            for (let j = 1; j <= m; j++) { dp[0][j] = j * GAP; trace[0][j] = 'left'; }
-            
+        
+            const n = seq1.length;
+            const m = seq2.length;
+        
+            const dp = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(0)
+            );
+        
+            const trace = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(null)
+            );
+        
+            for (let i = 1; i <= n; i++) {
+                dp[i][0] = i * GAP;
+                trace[i][0] = 'up';
+            }
+        
+            for (let j = 1; j <= m; j++) {
+                dp[0][j] = j * GAP;
+                trace[0][j] = 'left';
+            }
+        
             for (let i = 1; i <= n; i++) {
                 for (let j = 1; j <= m; j++) {
-                    const match = dp[i-1][j-1] + similarity(seq1[i-1], seq2[j-1]);
-                    const del = dp[i-1][j] + GAP;
-                    const ins = dp[i][j-1] + GAP;
-                    if (match >= del && match >= ins) { dp[i][j] = match; trace[i][j] = 'diag'; }
-                    else if (del >= ins) { dp[i][j] = del; trace[i][j] = 'up'; }
-                    else { dp[i][j] = ins; trace[i][j] = 'left'; }
+        
+                    const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
+                    const del = dp[i - 1][j] + GAP;
+                    const ins = dp[i][j - 1] + GAP;
+        
+                    const max = Math.max(match, del, ins);
+                    dp[i][j] = max;
+        
+                    if (max === match) trace[i][j] = 'diag';
+                    else if (max === del) trace[i][j] = 'up';
+                    else trace[i][j] = 'left';
                 }
             }
-            
-            const aligned1 = [], aligned2 = [];
+        
             let i = n, j = m;
+            const aligned1 = [];
+            const aligned2 = [];
+        
             while (i > 0 || j > 0) {
                 if (i > 0 && j > 0 && trace[i][j] === 'diag') {
-                    aligned1.unshift(seq1[i-1]); aligned2.unshift(seq2[j-1]); i--; j--;
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift(seq2[j - 1]);
+                    i--; j--;
                 } else if (i > 0 && trace[i][j] === 'up') {
-                    aligned1.unshift(seq1[i-1]); aligned2.unshift('—'); i--;
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift('—');
+                    i--;
                 } else {
-                    aligned1.unshift('—'); aligned2.unshift(seq2[j-1] ? seq2[j-1] : '—');
-                    if (j > 0) j--;
+                    aligned1.unshift('—');
+                    aligned2.unshift(seq2[j - 1]);
+                    j--;
                 }
             }
+        
             return [aligned1, aligned2];
         }
         
         function alignMultiple(mainWords, otherWordsArray) {
             const alignments = [];
+            
             for (let ow of otherWordsArray) {
                 const [alignedMain, alignedOther] = needlemanWunsch(mainWords, ow);
                 alignments.push(alignedOther.map(w => ({ other: w })));
             }
-            return { mainWords, alignments };
+            
+            return {
+                mainWords: mainWords,
+                alignments: alignments
+            };
         }
         
         function detectWordDiffType(mainWord, otherWord) {
@@ -645,13 +714,16 @@
             if (mainWord === otherWord) return null;
             if (mainWord === '—' || otherWord === '—') return 'insertion';
             
-            const nm = normalizeText(mainWord).replace(/[·⸱※∽⁘:.,;!?]/g, '');
-            const no = normalizeText(otherWord).replace(/[·⸱※∽⁘:.,;!?]/g, '');
+            const nm = normalizeText(mainWord);
+            const no = normalizeText(otherWord);
+            
             if (nm === no) return null;
             
             const graphicPairs = [
-                ['ѹ','у'],['ꙋ','у'],['оу','у'],['ѣ','е'],['ꙗ','я'],['ѧ','я'],
-                ['і','и'],['ї','и'],['ѵ','и'],['ѡ','о'],['ꙩ','о'],['ѳ','ф'],
+                ['ѹ','у'],['ꙋ','у'],['оу','у'],
+                ['ѣ','е'],['ꙗ','я'],['ѧ','я'],
+                ['і','и'],['ї','и'],['ѵ','и'],
+                ['ѡ','о'],['ꙩ','о'],['ѳ','ф'],
                 ['ѕ','з'],['ꙁ','з'],['ꙑ','ы']
             ];
             let tm = nm, to = no;
@@ -677,19 +749,34 @@
         }
         
         function calculateDiffStats() {
-            const stats = { 'graphic': 0, 'phonetic': 0, 'morph': 0, 'lexical': 0, 'match': 0, 'insertion': 0 };
+            const stats = {
+                'graphic': 0,
+                'phonetic': 0,
+                'morph': 0,
+                'lexical': 0,
+                'match': 0
+            };
+            
             if (!alignedData) return stats;
+            
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 const mainWord = alignedData.mainWords[i];
+                
                 alignedData.alignments.forEach(alignment => {
                     const pair = alignment[i];
                     if (!pair) return;
+                    
                     const otherWord = pair.other || '—';
                     const diffType = detectWordDiffType(mainWord, otherWord);
-                    if (diffType && stats[diffType] !== undefined) stats[diffType]++;
-                    else if (!diffType && mainWord === otherWord) stats.match++;
+                    
+                    if (diffType && stats[diffType] !== undefined) {
+                        stats[diffType]++;
+                    } else if (!diffType && mainWord === otherWord) {
+                        stats.match++;
+                    }
                 });
             }
+            
             return stats;
         }
         
@@ -699,53 +786,44 @@
         
         alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
+            
             const mainIndex = parseInt(mainMsSelect.value);
-            if (isNaN(mainIndex)) { alert('Выберите главный список'); return; }
+            if (isNaN(mainIndex)) {
+                alert('Выберите главный список');
+                return;
+            }
+            
+            const startSheet = folioStart.value;
+            const endSheet = folioEnd.value;
             
             progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Поиск начала притчи...';
+            progressDiv.innerHTML = '⏳ Подготовка текста...';
             
-            setTimeout(() => {
-                try {
-                    const mainMs = manuscripts[mainIndex];
-                    let mainWords = [...mainMs.data.words];
-                    
-                    const mainStart = findParableStart(mainWords);
-                    mainWords = mainWords.slice(mainStart);
-                    
-                    console.log(`Главный список (${mainMs.name}): начало с позиции ${mainStart}`);
-                    
-                    const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
-                    
-                    progressDiv.innerHTML = '⏳ Подготовка остальных списков...';
-                    
-                    const otherWordsArray = otherMss.map(ms => {
-                        let words = [...ms.data.words];
-                        const start = findParableStart(words);
-                        console.log(`${ms.name}: начало с позиции ${start}`);
-                        return words.slice(start);
-                    });
-                    
-                    progressDiv.innerHTML = '⏳ Множественное выравнивание...';
-                    
-                    const result = alignMultiple(mainWords, otherWordsArray);
-                    
-                    alignedData = {
-                        main: mainMs.name,
-                        aligned: otherMss.map(m => m.name),
-                        mainWords: result.mainWords,
-                        alignments: result.alignments
-                    };
-                    
-                    progressDiv.style.display = 'none';
-                    renderWordAlignmentTable();
-                    exportBtn.disabled = false;
-                    
-                } catch (err) {
-                    progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
-                    console.error('Ошибка выравнивания:', err);
-                }
-            }, 100);
+            const mainMs = manuscripts[mainIndex];
+            const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
+            const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
+            
+            const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
+            
+            progressDiv.innerHTML = '⏳ Множественное выравнивание...';
+            
+            const otherWordsArray = otherMss.map(ms => {
+                const text = ms.data.fullText;
+                return text.split(/\s+/).filter(w => w.length > 0);
+            });
+            
+            const result = alignMultiple(mainWords, otherWordsArray);
+            
+            alignedData = {
+                main: mainMs.name,
+                aligned: otherMss.map(m => m.name),
+                mainWords: result.mainWords,
+                alignments: result.alignments
+            };
+            
+            progressDiv.style.display = 'none';
+            renderWordAlignmentTable();
+            exportBtn.disabled = false;
         });
         
         // ============================================================
@@ -754,11 +832,15 @@
         
         function renderWordAlignmentTable() {
             const container = document.getElementById('alignmentResult');
+            const startSheet = folioStart.value || '?';
+            const endSheet = folioEnd.value || '?';
+            
             if (!alignedData) return;
             
             initColumnOrder();
             
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Пословное выравнивание</h3>';
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Слов в главном списке: ${alignedData.mainWords.length}</p>`;
             html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
             
@@ -766,12 +848,24 @@
             html += '<div style="margin: 16px 0; padding: 16px; background: #f0eae2; border-radius: 12px;">';
             html += '<h4 style="margin-bottom: 12px;">📊 Статистика разночтений:</h4>';
             html += '<div style="display: flex; flex-wrap: wrap; gap: 16px;">';
-            const statLabels = { 'graphic': 'Графические', 'phonetic': 'Фонетические', 'morph': 'Морфологические', 'lexical': 'Лексические', 'match': 'Совпадения', 'insertion': 'Вставки/Пропуски' };
+            
+            const statLabels = {
+                'graphic': 'Графические',
+                'phonetic': 'Фонетические',
+                'morph': 'Морфологические',
+                'lexical': 'Лексические',
+                'match': 'Совпадения'
+            };
+            
             Object.entries(stats).forEach(([type, count]) => {
                 if (statLabels[type]) {
-                    html += `<div style="display: flex; align-items: center; gap: 8px;"><span style="background: ${getColorForType(type)}; width: 16px; height: 16px; border-radius: 4px;"></span><span>${statLabels[type]}: <strong>${count}</strong></span></div>`;
+                    html += `<div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="background: ${getColorForType(type)}; width: 16px; height: 16px; border-radius: 4px;"></span>
+                        <span>${statLabels[type]}: <strong>${count}</strong></span>
+                    </div>`;
                 }
             });
+            
             html += '</div></div>';
             
             html += renderDiffFilters();
@@ -779,18 +873,23 @@
             
             html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
             html += '<table class="alignment-table" style="min-width: 100%;">';
+            
             html += '<thead><tr>';
             html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;">№</th>';
             
             const allNames = [alignedData.main, ...alignedData.aligned];
+            
             columnOrder.forEach((idx, pos) => {
                 const isMain = idx === 0;
                 const name = allNames[idx];
                 const draggableClass = isMain ? '' : 'draggable';
                 const mainBadge = isMain ? ' (главный)' : '';
                 html += `<th class="${draggableClass}" style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;" data-col-index="${idx}" data-col-pos="${pos}" draggable="${!isMain}">${name}${mainBadge}</th>`;
-                if (!isMain) html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10; width: 80px;">Тип</th>';
+                if (!isMain) {
+                    html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10; width: 80px;">Тип</th>';
+                }
             });
+            
             html += '</tr></thead><tbody>';
             
             for (let i = 0; i < alignedData.mainWords.length; i++) {
@@ -803,18 +902,22 @@
                     } else {
                         const listIdx = idx - 1;
                         const alignment = alignedData.alignments[listIdx];
-                        const pair = alignment[i] || { other: '—' };
+                        const pair = alignment[i] || { main: alignedData.mainWords[i], other: '—', type: 'missing' };
                         const otherWord = pair.other || '—';
                         const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
                         const diffClass = diffType ? getDiffClass(diffType) : '';
+                        
                         html += `<td class="verse-text ${diffClass}" data-col="${idx}" data-row="${i}">${escapeHtml(otherWord)}</td>`;
                         html += '<td style="font-size: 12px; color: #6b5a4a;">';
                         if (diffType) {
                             html += `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
-                        } else { html += '✓'; }
+                        } else {
+                            html += '✓';
+                        }
                         html += '</td>';
                     }
                 });
+                
                 html += '</tr>';
             }
             
@@ -835,22 +938,29 @@
                 document.querySelectorAll('.verse-text').forEach(cell => {
                     cell.addEventListener('click', function(e) {
                         if (this.classList.contains('editing')) return;
+                        
                         const word = this.textContent.trim();
                         if (!word || word === '—') return;
+                        
                         const colIdx = parseInt(this.dataset.col);
                         const allNames = [alignedData.main, ...alignedData.aligned];
                         const manuscriptName = allNames[colIdx];
-                        if (manuscriptName) showContext(word, manuscriptName);
+                        
+                        if (manuscriptName) {
+                            showContext(word, manuscriptName);
+                        }
                     });
+                    
                     cell.style.cursor = 'pointer';
                     cell.title = 'Нажмите для просмотра контекста';
                 });
             }, 100);
             
             container.innerHTML = html;
+            
             setupDragAndDrop();
             applyColumnVisibility();
-            applyRowFiltering();
+            applyDiffHighlights();
             makeEditable();
         }
         
@@ -862,6 +972,7 @@
             let html = '<div class="diff-filters">';
             html += '<div class="diff-filters-title">🔬 Типы разночтений:</div>';
             html += '<div class="diff-filters-list">';
+            
             const filters = [
                 { id: 'graphic', name: 'Графические', color: '#c0392b' },
                 { id: 'phonetic', name: 'Фонетические', color: '#d4a017' },
@@ -869,19 +980,25 @@
                 { id: 'lexical', name: 'Лексические', color: '#8e44ad' },
                 { id: 'syntax', name: 'Синтаксические', color: '#2980b9' }
             ];
+            
             filters.forEach(f => {
                 const checked = diffTypesEnabled[f.id] ? 'checked' : '';
-                html += `<div class="diff-filter-item" onclick="toggleDiffType('${f.id}')"><input type="checkbox" id="diff_${f.id}" ${checked}><span class="color-badge" style="background: ${f.color};"></span><label for="diff_${f.id}">${f.name}</label></div>`;
+                html += `
+                    <div class="diff-filter-item" onclick="toggleDiffType('${f.id}')">
+                        <input type="checkbox" id="diff_${f.id}" ${checked}>
+                        <span class="color-badge" style="background: ${f.color};"></span>
+                        <label for="diff_${f.id}">${f.name}</label>
+                    </div>
+                `;
             });
+            
             html += '</div>';
-            html += '<div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">';
-            html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px;">✓ Выбрать все</button>';
+            html += '<div style="margin-top: 12px;">';
+            html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px; margin-right: 8px;">✓ Выбрать все</button>';
             html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
-            html += '<label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: 8px;">';
-            html += '<input type="checkbox" id="filterModeCheckbox" onchange="toggleFilterMode()">';
-            html += '<span style="font-size: 13px; color: #4a3d2c;">🔍 Показывать только строки с разночтениями</span>';
-            html += '</label>';
-            html += '</div></div>';
+            html += '</div>';
+            html += '</div>';
+            
             return html;
         }
         
@@ -889,134 +1006,86 @@
             const checkbox = document.getElementById(`diff_${type}`);
             if (checkbox) {
                 diffTypesEnabled[type] = checkbox.checked;
-                const anyChecked = Object.values(diffTypesEnabled).some(v => v);
-                if (!anyChecked && filterModeOnlyDiffs) {
-                    filterModeOnlyDiffs = false;
-                    const filterCheckbox = document.getElementById('filterModeCheckbox');
-                    if (filterCheckbox) filterCheckbox.checked = false;
-                }
-                applyRowFiltering();
+                applyDiffHighlights();
             }
         };
         
         window.selectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = true);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = true);
-            applyRowFiltering();
+            applyDiffHighlights();
         };
         
         window.deselectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
-            filterModeOnlyDiffs = false;
-            const filterCheckbox = document.getElementById('filterModeCheckbox');
-            if (filterCheckbox) filterCheckbox.checked = false;
-            applyRowFiltering();
+            applyDiffHighlights();
         };
-        
-        window.toggleFilterMode = function() {
-            filterModeOnlyDiffs = document.getElementById('filterModeCheckbox').checked;
-            applyRowFiltering();
-        };
-        
-        function rowHasEnabledDiffType(rowIndex) {
-            if (!alignedData) return true;
-            const mainWord = alignedData.mainWords[rowIndex];
-            for (let j = 0; j < alignedData.alignments.length; j++) {
-                const pair = alignedData.alignments[j][rowIndex];
-                if (!pair) continue;
-                const diffType = detectWordDiffType(mainWord, pair.other || '—');
-                if (diffType && diffTypesEnabled[diffType]) return true;
-            }
-            return false;
-        }
-        
-        function applyRowFiltering() {
-            if (!alignedData) return;
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            
-            for (let i = 0; i < alignedData.mainWords.length; i++) {
-                const row = rows[i];
-                if (!row) continue;
-                
-                const mainWord = alignedData.mainWords[i];
-                let hasVisibleDiff = false;
-                
-                const cells = row.querySelectorAll('td.verse-text');
-                cells.forEach(cell => {
-                    const colIdx = parseInt(cell.dataset.col);
-                    if (colIdx === 0) return;
-                    
-                    const listIdx = colIdx - 1;
-                    const pair = alignedData.alignments[listIdx][i];
-                    if (!pair) return;
-                    
-                    const diffType = detectWordDiffType(mainWord, pair.other || '—');
-                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax', 'diff-insertion', 'diff-deletion');
-                    
-                    if (diffType && diffTypesEnabled[diffType]) {
-                        cell.classList.add(getDiffClass(diffType));
-                        hasVisibleDiff = true;
-                    }
-                });
-                
-                row.style.display = (filterModeOnlyDiffs && !hasVisibleDiff) ? 'none' : '';
-            }
-            
-            // Обновляем счетчик
-            let counterEl = document.getElementById('visibleRowsCounter');
-            if (filterModeOnlyDiffs) {
-                if (!counterEl) {
-                    counterEl = document.createElement('div');
-                    counterEl.id = 'visibleRowsCounter';
-                    counterEl.style.cssText = 'margin: 8px 0; padding: 8px 12px; background: #e8ddd0; border-radius: 8px; font-size: 13px; color: #3e3225;';
-                    const table = document.querySelector('.alignment-table');
-                    if (table && table.parentNode) table.parentNode.insertBefore(counterEl, table);
-                }
-                let visibleCount = 0;
-                rows.forEach(r => { if (r.style.display !== 'none') visibleCount++; });
-                counterEl.textContent = `🔍 Показано ${visibleCount} из ${alignedData.mainWords.length} строк`;
-                counterEl.style.display = '';
-            } else {
-                if (counterEl) counterEl.style.display = 'none';
-            }
-        }
         
         function renderColumnToggles() {
             if (!alignedData) return '';
+            
             const allColumns = [alignedData.main, ...alignedData.aligned];
-            if (columnVisibility.length !== allColumns.length) columnVisibility = allColumns.map(() => true);
-            let html = '<div class="column-toggles"><div class="column-toggles-title">👁️ Показывать списки:</div><div class="column-toggles-list">';
+            
+            if (columnVisibility.length !== allColumns.length) {
+                columnVisibility = allColumns.map(() => true);
+            }
+            
+            let html = '<div class="column-toggles">';
+            html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
+            html += '<div class="column-toggles-list">';
+            
             allColumns.forEach((name, index) => {
                 const checked = columnVisibility[index] ? 'checked' : '';
                 const isMain = index === 0;
-                html += `<div class="column-toggle-item" onclick="toggleColumn(${index})"><input type="checkbox" id="colToggle${index}" ${checked} ${isMain ? 'disabled' : ''}><label for="colToggle${index}" style="${isMain ? 'font-weight:600;' : ''}">${name}</label>${isMain ? '<span style="font-size:11px; color:#8b7355;">(главный)</span>' : ''}</div>`;
+                html += `
+                    <div class="column-toggle-item" onclick="toggleColumn(${index})">
+                        <input type="checkbox" id="colToggle${index}" ${checked} ${isMain ? 'disabled' : ''}>
+                        <label for="colToggle${index}" style="${isMain ? 'font-weight:600;' : ''}">${name}</label>
+                        ${isMain ? '<span style="font-size:11px; color:#8b7355;">(главный)</span>' : ''}
+                    </div>
+                `;
             });
+            
             html += '</div></div>';
             return html;
         }
         
         window.toggleColumn = function(index) {
             const checkbox = document.getElementById(`colToggle${index}`);
-            if (checkbox) { columnVisibility[index] = checkbox.checked; applyColumnVisibility(); }
+            if (checkbox) {
+                columnVisibility[index] = checkbox.checked;
+                applyColumnVisibility();
+            }
         };
         
         function applyColumnVisibility() {
             if (!alignedData) return;
+            
             const table = document.querySelector('.alignment-table');
             if (!table) return;
+            
             const headers = table.querySelectorAll('thead th:not(:first-child)');
-            headers.forEach(th => {
+            
+            headers.forEach((th, idx) => {
                 const colIndex = parseInt(th.dataset.colIndex);
-                if (isNaN(colIndex)) return;
-                th.classList.toggle('hidden-column', !columnVisibility[colIndex]);
+                if (!columnVisibility[colIndex]) {
+                    th.classList.add('hidden-column');
+                } else {
+                    th.classList.remove('hidden-column');
+                }
             });
+            
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td:not(:first-child)');
-                cells.forEach(td => {
+                cells.forEach((td, idx) => {
                     const colIdx = parseInt(td.dataset.col);
-                    if (!isNaN(colIdx)) td.classList.toggle('hidden-column', !columnVisibility[colIdx]);
+                    if (!columnVisibility[colIdx]) {
+                        td.classList.add('hidden-column');
+                    } else {
+                        td.classList.remove('hidden-column');
+                    }
                 });
             });
         }
@@ -1024,51 +1093,141 @@
         function initColumnOrder() {
             if (!alignedData) return;
             const totalCols = 1 + alignedData.aligned.length;
-            if (columnOrder.length !== totalCols) columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            if (columnOrder.length !== totalCols) {
+                columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            }
         }
         
         function moveColumn(fromIndex, toIndex) {
-            if (fromIndex === 0 || toIndex === 0) { alert('Главный список всегда должен быть первым'); return false; }
+            if (fromIndex === 0 || toIndex === 0) {
+                alert('Главный список всегда должен быть первым');
+                return false;
+            }
+            
             if (fromIndex === toIndex) return false;
-            columnOrder.splice(toIndex, 0, columnOrder.splice(fromIndex, 1)[0]);
+            
+            const item = columnOrder.splice(fromIndex, 1)[0];
+            columnOrder.splice(toIndex, 0, item);
+            
             return true;
         }
         
         window.resetColumnOrder = function() {
             if (!alignedData) return;
-            columnOrder = Array.from({ length: 1 + alignedData.aligned.length }, (_, i) => i);
+            const totalCols = 1 + alignedData.aligned.length;
+            columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            
             renderWordAlignmentTable();
             alert('Порядок сброшен');
         };
         
         function applyDiffHighlights() {
-            applyRowFiltering();
-        }
-        
-        let dragSourceIndex = null;
-        
-        function setupDragAndDrop() {
-            document.querySelectorAll('.alignment-table th.draggable').forEach(th => {
-                th.addEventListener('dragstart', e => {
-                    dragSourceIndex = parseInt(th.dataset.colPos);
-                    th.classList.add('dragging');
-                });
-                th.addEventListener('dragend', e => {
-                    th.classList.remove('dragging');
-                    document.querySelectorAll('.alignment-table th').forEach(h => h.classList.remove('drag-over'));
-                });
-                th.addEventListener('dragover', e => e.preventDefault());
-                th.addEventListener('dragenter', e => th.classList.add('drag-over'));
-                th.addEventListener('dragleave', e => th.classList.remove('drag-over'));
-                th.addEventListener('drop', e => {
-                    e.preventDefault();
-                    th.classList.remove('drag-over');
-                    const targetIndex = parseInt(th.dataset.colPos);
-                    if (dragSourceIndex !== null && dragSourceIndex !== targetIndex && targetIndex > 0 && moveColumn(dragSourceIndex, targetIndex)) {
-                        renderWordAlignmentTable();
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
+                
+                const cells = row.querySelectorAll('td.verse-text');
+                const mainWord = alignedData.mainWords[i];
+                
+                cells.forEach((cell, cellIdx) => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    if (colIdx === 0) return;
+                    
+                    const listIdx = colIdx - 1;
+                    const alignment = alignedData.alignments[listIdx];
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
+                    
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    if (diffType && diffTypesEnabled[diffType]) {
+                        cell.classList.add(getDiffClass(diffType));
                     }
                 });
+            }
+        }
+        
+        function setupDragAndDrop() {
+            const headers = document.querySelectorAll('.alignment-table th.draggable');
+            
+            headers.forEach(th => {
+                th.addEventListener('dragstart', handleDragStart);
+                th.addEventListener('dragend', handleDragEnd);
+                th.addEventListener('dragover', handleDragOver);
+                th.addEventListener('dragenter', handleDragEnter);
+                th.addEventListener('dragleave', handleDragLeave);
+                th.addEventListener('drop', handleDrop);
             });
+        }
+        
+        function handleDragStart(e) {
+            const th = e.target.closest('th');
+            if (!th) return;
+            
+            dragSourceIndex = parseInt(th.dataset.colPos);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragSourceIndex);
+            th.classList.add('dragging');
+        }
+        
+        function handleDragEnd(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('dragging');
+            
+            document.querySelectorAll('.alignment-table th').forEach(h => {
+                h.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleDragEnter(e) {
+            const th = e.target.closest('th');
+            if (th && th.classList.contains('draggable')) {
+                th.classList.add('drag-over');
+            }
+        }
+        
+        function handleDragLeave(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('drag-over');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            const targetTh = e.target.closest('th');
+            if (!targetTh) return;
+            
+            targetTh.classList.remove('drag-over');
+            
+            const targetIndex = parseInt(targetTh.dataset.colPos);
+            const sourceIndex = dragSourceIndex;
+            
+            if (sourceIndex === null || sourceIndex === targetIndex) return;
+            
+            const sourceOrderIdx = columnOrder[sourceIndex];
+            const targetOrderIdx = columnOrder[targetIndex];
+            
+            if (sourceOrderIdx === 0 || targetOrderIdx === 0) {
+                alert('Главный список всегда должен быть первым');
+                return;
+            }
+            
+            if (moveColumn(sourceIndex, targetIndex)) {
+                renderWordAlignmentTable();
+            }
         }
         
         function makeEditable() {
@@ -1080,12 +1239,16 @@
         
         function handleDoubleClick(e) {
             const cell = e.currentTarget;
+            
             if (cell.classList.contains('editing')) return;
+            
             const originalText = cell.textContent;
             const rowIdx = parseInt(cell.dataset.row);
             const colIdx = parseInt(cell.dataset.col);
+            
             const textarea = document.createElement('textarea');
             textarea.value = originalText;
+            
             cell.classList.add('editing');
             cell.textContent = '';
             cell.appendChild(textarea);
@@ -1095,63 +1258,94 @@
                 const newText = textarea.value.trim() || originalText;
                 cell.textContent = newText;
                 cell.classList.remove('editing');
+                
                 if (alignedData) {
-                    if (colIdx === 0) alignedData.mainWords[rowIdx] = newText;
-                    else {
+                    if (colIdx === 0) {
+                        alignedData.mainWords[rowIdx] = newText;
+                    } else {
                         const listIdx = colIdx - 1;
-                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][rowIdx])
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][rowIdx]) {
                             alignedData.alignments[listIdx][rowIdx].other = newText;
+                        }
                     }
                 }
+                
                 updateDiffTypeForCell(rowIdx, colIdx);
                 exportBtn.disabled = false;
             };
             
             textarea.addEventListener('blur', save);
+            
             textarea.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); save(); }
-                if (e.key === 'Escape') { cell.textContent = originalText; cell.classList.remove('editing'); }
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    save();
+                }
+                if (e.key === 'Escape') {
+                    cell.textContent = originalText;
+                    cell.classList.remove('editing');
+                }
             });
         }
         
         function updateDiffTypeForCell(rowIdx, colIdx) {
             if (colIdx === 0) return;
+            
             const row = document.querySelectorAll('.alignment-table tbody tr')[rowIdx];
             if (!row) return;
+            
             const cells = row.querySelectorAll('td');
             const mainWord = alignedData.mainWords[rowIdx];
             const listIdx = colIdx - 1;
-            const pair = alignedData.alignments[listIdx][rowIdx];
+            const alignment = alignedData.alignments[listIdx];
+            const pair = alignment[rowIdx];
+            
             if (!pair) return;
+            
             const otherWord = pair.other || '—';
             const diffType = detectWordDiffType(mainWord, otherWord);
+            
             let typeCell = null;
             for (let i = 0; i < cells.length; i++) {
                 if (cells[i].classList.contains('verse-text') && parseInt(cells[i].dataset.col) === colIdx) {
-                    typeCell = cells[i + 1]; break;
+                    typeCell = cells[i + 1];
+                    break;
                 }
             }
+            
             if (typeCell) {
-                typeCell.innerHTML = diffType ? `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>` : '✓';
+                if (diffType) {
+                    typeCell.innerHTML = `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
+                } else {
+                    typeCell.innerHTML = '✓';
+                }
             }
-            applyRowFiltering();
+            
+            applyDiffHighlights();
         }
         
         function updateAlignedDataFromTable() {
             if (!alignedData) return;
+            
             const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 const row = rows[i];
                 if (!row) continue;
+                
                 const cells = row.querySelectorAll('td.verse-text');
+                
                 cells.forEach(cell => {
                     const colIdx = parseInt(cell.dataset.col);
                     const newText = cell.textContent.trim();
-                    if (colIdx === 0) alignedData.mainWords[i] = newText;
-                    else {
+                    
+                    if (colIdx === 0) {
+                        alignedData.mainWords[i] = newText;
+                    } else {
                         const listIdx = colIdx - 1;
-                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][i])
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][i]) {
                             alignedData.alignments[listIdx][i].other = newText;
+                        }
                     }
                 });
             }
@@ -1163,39 +1357,87 @@
         
         function getWordContext(fullText, word, contextSize = 5) {
             if (!fullText || !word) return null;
+            
             const words = fullText.split(/\s+/);
             const wordIndex = words.findIndex(w => w === word);
+            
             if (wordIndex === -1) {
-                const nw = normalizeText(word);
-                const ni = words.findIndex(w => normalizeText(w) === nw);
-                if (ni === -1) return null;
-                const start = Math.max(0, ni - contextSize);
-                const end = Math.min(words.length, ni + contextSize + 1);
-                return { before: words.slice(start, ni), word: words[ni], after: words.slice(ni + 1, end), position: ni + 1, total: words.length };
+                const normalizedWord = normalizeText(word);
+                const normIndex = words.findIndex(w => normalizeText(w) === normalizedWord);
+                if (normIndex === -1) return null;
+                
+                const start = Math.max(0, normIndex - contextSize);
+                const end = Math.min(words.length, normIndex + contextSize + 1);
+                
+                return {
+                    before: words.slice(start, normIndex),
+                    word: words[normIndex],
+                    after: words.slice(normIndex + 1, end),
+                    position: normIndex + 1,
+                    total: words.length
+                };
             }
+            
             const start = Math.max(0, wordIndex - contextSize);
             const end = Math.min(words.length, wordIndex + contextSize + 1);
-            return { before: words.slice(start, wordIndex), word: words[wordIndex], after: words.slice(wordIndex + 1, end), position: wordIndex + 1, total: words.length };
+            
+            return {
+                before: words.slice(start, wordIndex),
+                word: words[wordIndex],
+                after: words.slice(wordIndex + 1, end),
+                position: wordIndex + 1,
+                total: words.length
+            };
         }
         
         function showContext(word, manuscriptName) {
             const fullText = manuscriptTexts[manuscriptName];
-            if (!fullText) { alert('Текст не найден для: ' + manuscriptName); return; }
+            if (!fullText) {
+                alert('Текст не найден для: ' + manuscriptName);
+                return;
+            }
+            
             const context = getWordContext(fullText, word);
-            if (!context) { alert('Слово не найдено в тексте'); return; }
+            if (!context) {
+                alert('Слово не найдено в тексте');
+                return;
+            }
             
             const modal = document.getElementById('contextModal');
-            document.getElementById('contextTitle').textContent = `Контекст слова «${word}»`;
-            document.getElementById('contextText').innerHTML = context.before.map(w => escapeHtml(w)).join(' ') + ' <span class="context-word-highlight">' + escapeHtml(context.word) + '</span> ' + context.after.map(w => escapeHtml(w)).join(' ');
-            document.getElementById('contextSource').textContent = `📄 ${manuscriptName}`;
-            document.getElementById('contextPosition').textContent = `Слово ${context.position} из ${context.total}`;
+            const title = document.getElementById('contextTitle');
+            const text = document.getElementById('contextText');
+            const source = document.getElementById('contextSource');
+            const position = document.getElementById('contextPosition');
+            
+            title.textContent = `Контекст слова «${word}»`;
+            
+            const beforeHtml = context.before.map(w => escapeHtml(w)).join(' ');
+            const wordHtml = `<span class="context-word-highlight">${escapeHtml(context.word)}</span>`;
+            const afterHtml = context.after.map(w => escapeHtml(w)).join(' ');
+            
+            text.innerHTML = `${beforeHtml} ${wordHtml} ${afterHtml}`;
+            source.textContent = `📄 ${manuscriptName}`;
+            position.textContent = `Слово ${context.position} из ${context.total}`;
+            
             modal.classList.add('active');
         }
         
-        window.closeContext = function() { document.getElementById('contextModal').classList.remove('active'); };
+        window.closeContext = function() {
+            document.getElementById('contextModal').classList.remove('active');
+        };
         
-        document.addEventListener('click', function(e) { if (e.target === document.getElementById('contextModal')) document.getElementById('contextModal').classList.remove('active'); });
-        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') document.getElementById('contextModal').classList.remove('active'); });
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('contextModal');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.getElementById('contextModal').classList.remove('active');
+            }
+        });
         
         // ============================================================
         // СЕССИИ, ЭКСПОРТ
@@ -1206,6 +1448,7 @@
             const session = {
                 files: uploadedFiles.map(f => f.name),
                 aligned: alignedData,
+                sheets: { start: folioStart.value, end: folioEnd.value },
                 columnVisibility: columnVisibility,
                 columnOrder: columnOrder,
                 diffTypesEnabled: diffTypesEnabled,
@@ -1219,28 +1462,39 @@
             const saved = localStorage.getItem('corpusSession');
             if (saved) {
                 const session = JSON.parse(saved);
+                folioStart.value = session.sheets.start;
+                folioEnd.value = session.sheets.end;
                 if (session.columnVisibility) columnVisibility = session.columnVisibility;
                 if (session.columnOrder) columnOrder = session.columnOrder;
                 if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;
                 alert('Загружена сессия от ' + session.timestamp);
-            } else { alert('Нет сохранённой сессии'); }
+            } else {
+                alert('Нет сохранённой сессии');
+            }
         };
         
         window.exportWordAlignmentCSV = function() {
             if (!alignedData) return;
+            
             let csv = '№,Главный список (' + alignedData.main + ')';
-            alignedData.aligned.forEach(name => { csv += ',' + name + ',Тип разночтения'; });
+            alignedData.aligned.forEach(name => {
+                csv += ',' + name + ',Тип разночтения';
+            });
             csv += '\n';
+            
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 csv += (i + 1) + ',"' + alignedData.mainWords[i] + '"';
+                
                 alignedData.alignments.forEach(alignment => {
                     const pair = alignment[i] || { other: '—' };
                     const otherWord = pair.other || '—';
                     const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
                     csv += ',"' + otherWord + '",' + (diffType || 'совпадение');
                 });
+                
                 csv += '\n';
             }
+            
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1251,18 +1505,26 @@
         window.copyStatsToClipboard = function() {
             const stats = calculateDiffStats();
             let text = 'Статистика разночтений:\n';
-            text += `Графические: ${stats.graphic}\nФонетические: ${stats.phonetic}\nМорфологические: ${stats.morph}\nЛексические: ${stats.lexical}\nСовпадения: ${stats.match}\nВставки: ${stats.insertion}\n`;
+            text += `Графические: ${stats.graphic}\n`;
+            text += `Фонетические: ${stats.phonetic}\n`;
+            text += `Морфологические: ${stats.morph}\n`;
+            text += `Лексические: ${stats.lexical}\n`;
+            text += `Совпадения: ${stats.match}\n`;
+            
             navigator.clipboard.writeText(text);
             alert('Статистика скопирована!');
         };
         
         exportBtn.addEventListener('click', () => {
             updateAlignedDataFromTable();
+            
             if (!alignedData) return;
+            
             let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Пословное выравнивание</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
             xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
             alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
             xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n';
+            
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 xml += '      <div type="alignment" n="' + (i+1) + '">\n';
                 xml += '        <seg wit="#main">' + alignedData.mainWords[i] + '</seg>\n';
@@ -1272,7 +1534,9 @@
                 });
                 xml += '      </div>\n';
             }
+            
             xml += '    </body>\n  </text>\n</TEI>';
+            
             const blob = new Blob([xml], { type: 'application/xml' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
