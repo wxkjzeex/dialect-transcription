@@ -32,142 +32,51 @@
         }
         .header h1 { font-size: 28px; font-weight: 400; letter-spacing: 2px; }
         .header p { opacity: 0.8; font-size: 14px; margin-top: 8px; }
-        .tabs {
-            display: flex;
-            background: #e8ddd0;
-            padding: 0 24px;
-            gap: 4px;
-        }
+        .tabs { display: flex; background: #e8ddd0; padding: 0 24px; gap: 4px; }
         .tab {
-            padding: 14px 24px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #6b5a4a;
-            cursor: pointer;
-            border-radius: 12px 12px 0 0;
-            transition: all 0.2s;
-            text-decoration: none;
+            padding: 14px 24px; font-size: 14px; font-weight: 600;
+            color: #6b5a4a; cursor: pointer; border-radius: 12px 12px 0 0;
+            transition: all 0.2s; text-decoration: none;
         }
         .tab:hover { background: #d9cbbc; }
         .tab.active { background: #fffbf5; color: #4a3d2c; }
         .content { padding: 32px; }
         .upload-area {
-            border: 2px dashed #c9af91;
-            border-radius: 16px;
-            padding: 32px;
-            text-align: center;
-            margin-bottom: 24px;
-            cursor: pointer;
-            transition: all 0.2s;
+            border: 2px dashed #c9af91; border-radius: 16px; padding: 32px;
+            text-align: center; margin-bottom: 24px; cursor: pointer; transition: all 0.2s;
         }
         .upload-area:hover { border-color: #8b7355; background: #faf5ef; }
         .btn {
-            padding: 12px 24px;
-            background: #4a3d2c;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+            padding: 12px 24px; background: #4a3d2c; color: white; border: none;
+            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; margin: 4px;
         }
         .btn:hover { background: #5d4e37; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-secondary { background: #8b7355; }
         .file-list { margin-top: 16px; }
         .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 16px;
-            background: #f0eae2;
-            border-radius: 8px;
-            margin-bottom: 8px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; background: #f0eae2; border-radius: 8px; margin-bottom: 8px;
         }
         .file-remove { color: #a05040; cursor: pointer; font-weight: bold; }
-        .controls {
-            display: flex;
-            gap: 12px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-        
-        .alignment-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 24px;
-            font-size: 14px;
-        }
+        .controls { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; align-items: center; }
+        .alignment-table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 14px; }
         .alignment-table th {
-            text-align: left;
-            padding: 12px;
-            background: #e8ddd0;
-            color: #3e3225;
-            font-weight: 600;
-            border: 1px solid #d4c5b0;
-            position: sticky;
-            top: 0;
-            z-index: 10;
+            text-align: left; padding: 12px; background: #e8ddd0; color: #3e3225;
+            font-weight: 600; border: 1px solid #d4c5b0; position: sticky; top: 0; z-index: 10;
         }
-        .alignment-table td {
-            padding: 12px;
-            border: 1px solid #d4c5b0;
-            vertical-align: top;
-        }
+        .alignment-table td { padding: 12px; border: 1px solid #d4c5b0; vertical-align: top; }
         .alignment-table tr:hover td { background: #faf5ef; }
-        
-        .diff-graphic { background: #fde2e4 !important; border-left: 3px solid #c0392b; }
-        .diff-phonetic { background: #fff3cd !important; border-left: 3px solid #d4a017; }
-        .diff-morph { background: #d4edda !important; border-left: 3px solid #27ae60; }
-        .diff-lexical { background: #e2d5f1 !important; border-left: 3px solid #8e44ad; }
-        .diff-syntax { background: #d1ecf1 !important; border-left: 3px solid #2980b9; }
-        .diff-insertion { background: #ffe5e0 !important; border-left: 3px solid #e74c3c; }
-        .diff-deletion { background: #e0e0e0 !important; border-left: 3px solid #636e72; }
-        
-        .legend {
-            margin: 20px 0;
-            padding: 16px;
-            background: #f0eae2;
-            border-radius: 12px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-        }
-        .legend-color {
-            width: 24px;
-            height: 16px;
-            border-radius: 3px;
-        }
-        
-        .stats {
-            margin: 20px 0;
-            padding: 16px;
-            background: #f8f2ea;
-            border-radius: 12px;
-            border: 1px solid #d4c5b0;
-        }
-        .stat-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin: 8px 16px 8px 0;
-            font-size: 14px;
-        }
-        
-        .progress {
-            margin: 20px 0;
-            padding: 12px;
-            background: #e8ddd0;
-            border-radius: 8px;
-            text-align: center;
-        }
+        .diff-graphic { background: #fde2e4 !important; }
+        .diff-phonetic { background: #fff3cd !important; }
+        .diff-morph { background: #d4edda !important; }
+        .diff-lexical { background: #e2d5f1 !important; }
+        .diff-insertion { background: #ffe5e0 !important; }
+        .diff-deletion { background: #e0e0e0 !important; }
+        .stats { margin: 20px 0; padding: 16px; background: #f8f2ea; border-radius: 12px; border: 1px solid #d4c5b0; }
+        .stat-item { display: inline-flex; align-items: center; gap: 8px; margin: 8px 16px 8px 0; font-size: 14px; }
+        .progress { margin: 20px 0; padding: 12px; background: #e8ddd0; border-radius: 8px; text-align: center; }
     </style>
 </head>
 <body>
@@ -176,689 +85,157 @@
             <h1>📜 Притча о блудном сыне</h1>
             <p>Параллельный корпус · Лк 15:11-32 · Лабораторная работа №2</p>
         </div>
-        
         <div class="tabs">
             <a href="/" class="tab">Транскрипция</a>
             <a href="/corpus" class="tab active">Корпус</a>
             <a href="/map" class="tab">Карта</a>
         </div>
-        
         <div class="content">
             <div class="upload-area" id="dropZone">
-                <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
-                <div style="font-size: 18px; margin-bottom: 8px;">Загрузите файлы списков</div>
-                <div style="color: #9a8a78;">XML-TEI · Перетащите или нажмите для выбора</div>
-                <input type="file" id="fileInput" multiple accept=".xml" style="display: none;">
+                <div style="font-size:48px;margin-bottom:16px;">📂</div>
+                <div>Загрузите файлы списков (XML-TEI)</div>
+                <div style="color:#9a8a78;">Перетащите или нажмите</div>
+                <input type="file" id="fileInput" multiple accept=".xml" style="display:none;">
             </div>
-            
             <div id="fileList" class="file-list"></div>
-            
             <div class="controls">
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <label style="font-size: 13px; color: #3e3225;">Листы главного списка:</label>
-                    <input type="number" id="folioStart" placeholder="От" min="1" max="500" value="117" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
-                    <span>–</span>
-                    <input type="number" id="folioEnd" placeholder="До" min="1" max="500" value="119" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
-                </div>
-                <button class="btn" id="alignBtn" disabled>🔗 Выровнять локально</button>
-                <button class="btn btn-secondary" id="alignServerBtn" disabled>🔗 Выровнять на сервере</button>
-                <button class="btn btn-secondary" id="exportBtn" disabled>💾 Выгрузить XML-TEI</button>
-                <select id="mainMsSelect" style="padding: 12px; border-radius: 8px; border: 1px solid #d4c5b0;" disabled>
-                    <option value="">Выберите главный список</option>
-                </select>
+                <label>Листы: <input type="number" id="folioStart" value="117" style="width:60px;"> – 
+                <input type="number" id="folioEnd" value="119" style="width:60px;"></label>
+                <select id="mainMsSelect" disabled><option>Выберите главный список</option></select>
+                <button class="btn" id="alignBtn" disabled>🔗 Выровнять (сервер)</button>
+                <button class="btn btn-secondary" id="exportBtn" disabled>💾 XML-TEI</button>
             </div>
-            
-            <div id="progress" style="display: none;"></div>
+            <div id="progress" style="display:none;"></div>
             <div id="alignmentResult"></div>
         </div>
     </div>
-    
     <script>
-        // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
-        let uploadedFiles = [];
-        let manuscripts = [];  // [{ name, words, fullText, sheets, wordCount }]
+        let manuscripts = [];
         let alignedData = null;
-        let currentSessionId = null;
-        
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const fileList = document.getElementById('fileList');
-        const alignBtn = document.getElementById('alignBtn');
-        const alignServerBtn = document.getElementById('alignServerBtn');
-        const exportBtn = document.getElementById('exportBtn');
-        const mainMsSelect = document.getElementById('mainMsSelect');
-        const progressDiv = document.getElementById('progress');
-        
-        // ==================== DRAG & DROP ====================
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.style.borderColor = '#8b7355';
-            dropZone.style.background = '#faf5ef';
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.style.borderColor = '#c9af91';
-            dropZone.style.background = 'transparent';
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.style.borderColor = '#c9af91';
-            dropZone.style.background = 'transparent';
-            handleFiles(e.dataTransfer.files);
-        });
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-        
-        // ==================== КЛИЕНТСКИЙ ПАРСИНГ XML ====================
-        
-        function parseXMLOnClient(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(e.target.result, 'application/xml');
-                        
-                        // Проверка на ошибки парсинга
-                        const parseError = doc.querySelector('parsererror');
-                        if (parseError) {
-                            reject(new Error('Ошибка парсинга XML: ' + parseError.textContent));
-                            return;
-                        }
-                        
-                        const words = [];
-                        const sheets = [];
-                        let currentSheet = null;
-                        
-                        // Проходим по всем элементам
-                        const allElements = doc.querySelectorAll('*');
-                        
-                        for (let el of allElements) {
-                            const tag = el.tagName.toLowerCase();
-                            
-                            // Отслеживаем листы
-                            if (tag === 'milestone' && el.getAttribute('unit') === 'sheet') {
-                                const n = el.getAttribute('n');
-                                if (n) {
-                                    currentSheet = parseInt(n);
-                                    if (!isNaN(currentSheet)) {
-                                        sheets.push({ index: words.length, sheet: currentSheet });
-                                    }
-                                }
-                            }
-                            
-                            // Собираем слова
-                            if (tag === 'w' || tag === 'pc') {
-                                const text = el.textContent.trim();
-                                if (text && !['·', '⸱', '※', '∽', ':', '.', '⁘'].includes(text)) {
-                                    words.push(text);
-                                }
-                            }
-                        }
-                        
-                        if (words.length === 0) {
-                            reject(new Error('Не найдено слов в файле'));
-                            return;
-                        }
-                        
-                        resolve({
-                            name: file.name,
-                            words: words,
-                            fullText: words.join(' '),
-                            sheets: sheets,
-                            wordCount: words.length
-                        });
-                        
-                    } catch (err) {
-                        reject(err);
-                    }
-                };
-                
-                reader.onerror = () => reject(new Error('Ошибка чтения файла'));
-                reader.readAsText(file);
-            });
-        }
-        
-        // ==================== ОБРАБОТКА ФАЙЛОВ ====================
-        
+        const dz = document.getElementById('dropZone');
+        const fi = document.getElementById('fileInput');
+        const fl = document.getElementById('fileList');
+        const ab = document.getElementById('alignBtn');
+        const eb = document.getElementById('exportBtn');
+        const ms = document.getElementById('mainMsSelect');
+        const pd = document.getElementById('progress');
+
+        dz.onclick = () => fi.click();
+        dz.ondragover = e => { e.preventDefault(); dz.style.borderColor='#8b7355'; };
+        dz.ondragleave = () => { dz.style.borderColor='#c9af91'; };
+        dz.ondrop = e => { e.preventDefault(); dz.style.borderColor='#c9af91'; handleFiles(e.dataTransfer.files); };
+        fi.onchange = e => handleFiles(e.target.files);
+
+        // Клиентский парсинг XML (мгновенный)
         async function handleFiles(files) {
-            // Добавляем новые файлы
-            for (let file of files) {
-                if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
-                    uploadedFiles.push(file);
-                }
-            }
-            
-            if (uploadedFiles.length === 0) return;
-            
-            progressDiv.style.display = 'block';
-            progressDiv.className = 'progress';
-            progressDiv.innerHTML = '⏳ Парсинг XML файлов в браузере...';
-            
+            pd.style.display = 'block'; pd.innerHTML = '⏳ Парсинг...';
             manuscripts = [];
-            
-            for (let i = 0; i < uploadedFiles.length; i++) {
-                const file = uploadedFiles[i];
-                progressDiv.innerHTML = `⏳ Парсинг ${i + 1}/${uploadedFiles.length}: ${file.name}...`;
-                
+            for (let file of files) {
+                if (!file.name.endsWith('.xml')) continue;
                 try {
-                    const parsed = await parseXMLOnClient(file);
-                    manuscripts.push(parsed);
-                } catch (err) {
-                    console.error('Ошибка парсинга:', file.name, err);
-                    progressDiv.innerHTML = `❌ Ошибка в ${file.name}: ${err.message}`;
-                    return;
-                }
+                    const text = await file.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(text, 'application/xml');
+                    const words = [];
+                    doc.querySelectorAll('w, pc').forEach(el => {
+                        const t = el.textContent.trim();
+                        if (t && !'·⸱※∽⁘:.,;!?'.includes(t)) words.push(t);
+                    });
+                    if (words.length > 0) {
+                        manuscripts.push({ name: file.name, words, word_count: words.length, fullText: words.join(' ') });
+                    }
+                } catch(e) { alert('Ошибка в '+file.name+': '+e.message); return; }
             }
-            
-            progressDiv.innerHTML = `✅ Распарсено ${manuscripts.length} списков (всего ${manuscripts.reduce((sum, m) => sum + m.wordCount, 0)} слов)`;
-            setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
-            
-            renderFileList();
+            pd.innerHTML = '✅ Готово: '+manuscripts.length+' списков';
+            setTimeout(() => pd.style.display='none', 1500);
+            renderList();
+        }
+
+        function renderList() {
+            fl.innerHTML = manuscripts.map((m,i) => `<div class="file-item"><span>📄 ${m.name} (${m.word_count} слов)</span><span class="file-remove" onclick="manuscripts.splice(${i},1);renderList();updateUI();">✕</span></div>`).join('');
+            ms.innerHTML = '<option value="">Выберите главный список</option>' + manuscripts.map((m,i) => `<option value="${i}">${m.name}</option>`).join('');
             updateUI();
         }
-        
-        function renderFileList() {
-            if (manuscripts.length === 0) {
-                fileList.innerHTML = '';
-                return;
-            }
-            
-            let html = '<h3 style="margin-bottom: 12px; color: #3e3225;">Загруженные списки:</h3>';
-            manuscripts.forEach((ms, index) => {
-                const kbSize = uploadedFiles[index] ? (uploadedFiles[index].size / 1024).toFixed(1) : '?';
-                html += `
-                    <div class="file-item">
-                        <span>📄 ${ms.name} <span style="color: #8b7355;">(${ms.wordCount} слов, ${kbSize}KB)</span></span>
-                        <span class="file-remove" onclick="removeFile(${index})">✕</span>
-                    </div>
-                `;
-            });
-            fileList.innerHTML = html;
-            
-            let options = '<option value="">Выберите главный список</option>';
-            manuscripts.forEach((ms, index) => {
-                options += `<option value="${index}">${ms.name} (${ms.wordCount} слов)</option>`;
-            });
-            mainMsSelect.innerHTML = options;
-        }
-        
-        window.removeFile = function(index) {
-            uploadedFiles.splice(index, 1);
-            manuscripts.splice(index, 1);
-            alignedData = null;
-            document.getElementById('alignmentResult').innerHTML = '';
-            renderFileList();
-            updateUI();
-        };
-        
+
         function updateUI() {
-            const hasManuscripts = manuscripts.length >= 2;
-            alignBtn.disabled = !hasManuscripts;
-            alignServerBtn.disabled = !hasManuscripts;
-            exportBtn.disabled = !alignedData;
-            mainMsSelect.disabled = manuscripts.length < 2;
+            ab.disabled = manuscripts.length < 2 || ms.value === '';
+            eb.disabled = !alignedData;
+            ms.disabled = manuscripts.length < 2;
         }
-        
-        // ==================== АЛГОРИТМЫ ВЫРАВНИВАНИЯ (КЛИЕНТ) ====================
-        
-        function normalizeWord(word) {
-            if (!word || word === '—') return '';
-            
-            let w = word.toLowerCase();
-            // Удаляем пунктуацию
-            w = w.replace(/[·⸱※∽⁘:.,;!?]/g, '');
-            // Удаляем диакритику
-            w = w.replace(/[҃҄҅҆]/g, '');
-            w = w.replace(/[ъь]$/, '');
-            
-            // Замены
-            const reps = {
-                'ѣ': 'е', 'і': 'и', 'ї': 'и', 'ѵ': 'и',
-                'ѡ': 'о', 'ꙩ': 'о', 'ѹ': 'у', 'ꙋ': 'у',
-                'ѧ': 'я', 'ꙗ': 'я', 'ѳ': 'ф', 'ѕ': 'з',
-                'ꙁ': 'з', 'ꙑ': 'ы'
-            };
-            for (let [old, n] of Object.entries(reps)) {
-                w = w.replace(new RegExp(old, 'g'), n);
-            }
-            
-            return w;
-        }
-        
-        function wordSimilarity(w1, w2) {
-            if (w1 === w2) return 10;
-            
-            const n1 = normalizeWord(w1);
-            const n2 = normalizeWord(w2);
-            
-            if (!n1 && !n2) return 0;
-            if (n1 === n2) return 8;
-            
-            const anchors = new Set(['и', 'же', 'въ', 'не', 'на', 'къ', 'съ', 'от', 'за', 'яко']);
-            if (anchors.has(n1) && anchors.has(n2)) return 6;
-            
-            const maxLen = Math.max(n1.length, n2.length);
-            if (maxLen === 0) return 0;
-            
-            let matches = 0;
-            const minLen = Math.min(n1.length, n2.length);
-            for (let i = 0; i < minLen; i++) {
-                if (n1[i] === n2[i]) matches++;
-            }
-            
-            const ratio = matches / maxLen;
-            
-            if (ratio > 0.8) return 6;
-            if (ratio > 0.6) return 3;
-            if (ratio > 0.4) return 1;
-            return -2;
-        }
-        
-        function needlemanWunsch(seq1, seq2) {
-            const GAP = -5;
-            
-            // Ограничение размера для скорости
-            let n = Math.min(seq1.length, 500);
-            let m = Math.min(seq2.length, 500);
-            seq1 = seq1.slice(0, n);
-            seq2 = seq2.slice(0, m);
-            
-            const dp = Array.from({ length: n + 1 }, () => new Float32Array(m + 1));
-            const trace = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(''));
-            
-            for (let i = 1; i <= n; i++) {
-                dp[i][0] = i * GAP;
-                trace[i][0] = 'u';
-            }
-            for (let j = 1; j <= m; j++) {
-                dp[0][j] = j * GAP;
-                trace[0][j] = 'l';
-            }
-            
-            for (let i = 1; i <= n; i++) {
-                for (let j = 1; j <= m; j++) {
-                    const match = dp[i-1][j-1] + wordSimilarity(seq1[i-1], seq2[j-1]);
-                    const del = dp[i-1][j] + GAP;
-                    const ins = dp[i][j-1] + GAP;
-                    
-                    if (match >= del && match >= ins) {
-                        dp[i][j] = match;
-                        trace[i][j] = 'd';
-                    } else if (del >= ins) {
-                        dp[i][j] = del;
-                        trace[i][j] = 'u';
-                    } else {
-                        dp[i][j] = ins;
-                        trace[i][j] = 'l';
-                    }
-                }
-            }
-            
-            const aligned1 = [];
-            const aligned2 = [];
-            let i = n, j = m;
-            
-            while (i > 0 || j > 0) {
-                if (i > 0 && j > 0 && trace[i][j] === 'd') {
-                    aligned1.unshift(seq1[i-1]);
-                    aligned2.unshift(seq2[j-1]);
-                    i--; j--;
-                } else if (i > 0 && trace[i][j] === 'u') {
-                    aligned1.unshift(seq1[i-1]);
-                    aligned2.unshift('—');
-                    i--;
-                } else {
-                    aligned1.unshift('—');
-                    aligned2.unshift(seq2[j-1] || '—');
-                    if (j > 0) j--;
-                }
-            }
-            
-            return [aligned1, aligned2];
-        }
-        
-        function detectDiffType(mainWord, otherWord) {
-            if (mainWord === '—') return 'insertion';
-            if (otherWord === '—') return 'deletion';
-            if (mainWord === otherWord) return 'match';
-            
-            const normMain = normalizeWord(mainWord);
-            const normOther = normalizeWord(otherWord);
-            
-            if (normMain === normOther) return 'match';
-            
-            // Графические
-            const graphicPairs = [
-                ['ѹ', 'у'], ['ꙋ', 'у'], ['оу', 'у'],
-                ['ѣ', 'е'], ['ꙗ', 'я'], ['ѧ', 'я'],
-                ['і', 'и'], ['ї', 'и'], ['ѵ', 'и'],
-                ['ѡ', 'о'], ['ꙩ', 'о'], ['ѳ', 'ф'],
-                ['ѕ', 'з'], ['ꙁ', 'з']
-            ];
-            
-            let testMain = normMain;
-            let testOther = normOther;
-            for (let [old, n] of graphicPairs) {
-                testMain = testMain.replace(new RegExp(old, 'g'), n);
-                testOther = testOther.replace(new RegExp(old, 'g'), n);
-            }
-            
-            if (testMain === testOther) return 'graphic';
-            
-            // Морфологические
-            let prefixLen = 0;
-            const minLen = Math.min(testMain.length, testOther.length);
-            for (let i = 0; i < minLen; i++) {
-                if (testMain[i] === testOther[i]) prefixLen++;
-                else break;
-            }
-            
-            if (prefixLen >= 3) {
-                const suffix1 = testMain.slice(prefixLen);
-                const suffix2 = testOther.slice(prefixLen);
-                if (suffix1.length <= 3 && suffix2.length <= 3) return 'morph';
-            }
-            
-            // Фонетические
-            if (normMain.length === normOther.length && normMain.length > 2) {
-                let diffCount = 0;
-                for (let i = 0; i < normMain.length; i++) {
-                    if (normMain[i] !== normOther[i]) diffCount++;
-                }
-                if (diffCount <= 2) return 'phonetic';
-            }
-            
-            return 'lexical';
-        }
-        
-        // ==================== ЛОКАЛЬНОЕ ВЫРАВНИВАНИЕ ====================
-        
-        alignBtn.addEventListener('click', () => {
-            const mainIndex = parseInt(mainMsSelect.value);
-            if (isNaN(mainIndex)) {
-                alert('Выберите главный список');
-                return;
-            }
-            
-            progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Выполняется выравнивание в браузере...';
-            
-            // Используем setTimeout чтобы дать браузеру обновить UI
-            setTimeout(() => {
-                try {
-                    const startTime = performance.now();
-                    
-                    const mainWords = manuscripts[mainIndex].words.slice(0, 500);
-                    const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
-                    
-                    const allAligned = [];
-                    const otherNames = [];
-                    
-                    for (let ms of otherMss) {
-                        const otherWords = ms.words.slice(0, 500);
-                        const [alignedMain, alignedOther] = needlemanWunsch(mainWords, otherWords);
-                        allAligned.push(alignedOther);
-                        otherNames.push(ms.name);
-                    }
-                    
-                    // Строим таблицу
-                    const maxLen = Math.max(...allAligned.map(a => a.length), mainWords.length);
-                    const alignmentTable = [];
-                    const diffTypesTable = [];
-                    const stats = {
-                        total: 0, match: 0, graphic: 0, phonetic: 0,
-                        morph: 0, lexical: 0, insertion: 0, deletion: 0
-                    };
-                    
-                    for (let i = 0; i < maxLen; i++) {
-                        const mainWord = i < mainWords.length ? mainWords[i] : '—';
-                        const row = [mainWord];
-                        const typesRow = [];
-                        
-                        for (let alOther of allAligned) {
-                            const otherWord = i < alOther.length ? alOther[i] : '—';
-                            row.push(otherWord);
-                            const dt = detectDiffType(mainWord, otherWord);
-                            typesRow.push(dt);
-                            
-                            stats.total++;
-                            if (stats[dt] !== undefined) stats[dt]++;
-                        }
-                        
-                        alignmentTable.push(row);
-                        diffTypesTable.push(typesRow);
-                    }
-                    
-                    if (stats.total > 0) {
-                        stats.matchPercent = Math.round(stats.match / stats.total * 1000) / 10;
-                    }
-                    
-                    alignedData = {
-                        alignment: alignmentTable,
-                        manuscript_names: [manuscripts[mainIndex].name, ...otherNames],
-                        diff_types: diffTypesTable,
-                        statistics: stats
-                    };
-                    
-                    const elapsed = Math.round(performance.now() - startTime);
-                    progressDiv.style.display = 'none';
-                    
-                    renderAlignment({...alignedData, align_time: (elapsed / 1000).toFixed(1)});
-                    exportBtn.disabled = false;
-                    
-                } catch (err) {
-                    progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
-                    console.error(err);
-                }
-            }, 100);
-        });
-        
-        // ==================== СЕРВЕРНОЕ ВЫРАВНИВАНИЕ (для больших файлов) ====================
-        
-        alignServerBtn.addEventListener('click', async () => {
-            const mainIndex = parseInt(mainMsSelect.value);
-            if (isNaN(mainIndex)) {
-                alert('Выберите главный список');
-                return;
-            }
-            
-            progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Отправка на сервер...';
-            
+
+        ms.onchange = updateUI;
+
+        // Серверное выравнивание
+        ab.onclick = async () => {
+            const mainIdx = parseInt(ms.value);
+            if (isNaN(mainIdx)) return;
+            pd.style.display = 'block'; pd.innerHTML = '⏳ Выравнивание на сервере...';
             try {
-                const payload = {
-                    manuscripts: manuscripts.map(m => ({
-                        name: m.name,
-                        words: m.words.slice(0, 1000),
-                        sheets: m.sheets
-                    })),
-                    main_index: mainIndex
-                };
-                
-                const response = await fetch('/align', {
+                const resp = await fetch('/align', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ manuscripts, main_index: mainIdx })
                 });
-                
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.error || `Ошибка ${response.status}`);
+                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка');
+                alignedData = await resp.json();
+                pd.style.display = 'none';
+                renderAlignment(alignedData);
+                eb.disabled = false;
+            } catch(e) { pd.innerHTML = '❌ '+e.message; }
+        };
+
+        function renderAlignment(d) {
+            const c = document.getElementById('alignmentResult');
+            const s = d.statistics;
+            let h = `<div class="stats"><h3>📊 Статистика</h3>`;
+            h += `<span class="stat-item">Всего: <b>${s.total}</b></span>`;
+            h += `<span class="stat-item">✅ Совпадений: <b>${s.match}</b> (${s.match_percent}%)</span>`;
+            h += `<span class="stat-item">✏️ Графические: <b>${s.graphic}</b></span>`;
+            h += `<span class="stat-item">🗣️ Фонетические: <b>${s.phonetic}</b></span>`;
+            h += `<span class="stat-item">📐 Морфологические: <b>${s.morph}</b></span>`;
+            h += `<span class="stat-item">📚 Лексические: <b>${s.lexical}</b></span>`;
+            h += `<span class="stat-item">➕ Вставки: <b>${s.insertion}</b></span>`;
+            h += `</div>`;
+            h += '<div style="overflow:auto;max-height:600px;"><table class="alignment-table"><thead><tr><th>№</th>';
+            d.manuscript_names.forEach(n => h += `<th>${n}</th>`);
+            h += '<th>Тип</th></tr></thead><tbody>';
+            
+            const cls = {graphic:'diff-graphic',phonetic:'diff-phonetic',morph:'diff-morph',lexical:'diff-lexical',insertion:'diff-insertion',deletion:'diff-deletion'};
+            const lbl = {graphic:'ГР',phonetic:'ФН',morph:'МФ',lexical:'ЛК',insertion:'ВСТ',deletion:'УД'};
+            const col = {graphic:'#c0392b',phonetic:'#d4a017',morph:'#27ae60',lexical:'#8e44ad',insertion:'#e74c3c',deletion:'#636e72'};
+            
+            for (let i = 0; i < d.alignment.length; i++) {
+                h += '<tr><td><b>'+(i+1)+'</b></td>';
+                d.alignment[i].forEach((w, j) => {
+                    const dt = j > 0 && d.diff_types[i] ? d.diff_types[i][j-1] : '';
+                    h += `<td class="${cls[dt]||''}">${w||'—'}</td>`;
+                });
+                h += '<td>';
+                if (d.diff_types[i]) {
+                    const types = [...new Set(d.diff_types[i].filter(t => t !== 'match'))];
+                    types.forEach(t => h += `<span style="background:${col[t]};color:white;padding:2px 6px;border-radius:4px;margin:1px;font-size:11px;">${lbl[t]}</span>`);
+                    if (!types.length) h += '✓';
                 }
-                
-                const result = await response.json();
-                alignedData = result;
-                currentSessionId = result.session_id;
-                
-                progressDiv.style.display = 'none';
-                renderAlignment(result);
-                exportBtn.disabled = false;
-                
-            } catch (err) {
-                progressDiv.innerHTML = '❌ Ошибка сервера: ' + err.message + '. Используйте локальное выравнивание.';
-                console.error(err);
+                h += '</td></tr>';
             }
-        });
-        
-        // ==================== ОТРИСОВКА РЕЗУЛЬТАТОВ ====================
-        
-        function renderAlignment(data) {
-            const container = document.getElementById('alignmentResult');
-            
-            if (!data.alignment || data.alignment.length === 0) {
-                container.innerHTML = '<p style="color: red;">Нет данных для отображения</p>';
-                return;
-            }
-            
-            let html = '';
-            
-            // Статистика
-            if (data.statistics) {
-                const s = data.statistics;
-                html += `
-                <div class="stats">
-                    <h3>📊 Статистика разночтений ${data.align_time ? '(время: ' + data.align_time + 'с)' : ''}</h3>
-                    <div class="stat-item">📝 Всего позиций: <strong>${s.total || 0}</strong></div>
-                    <div class="stat-item">✅ Совпадений: <strong>${s.match || 0}</strong> (${s.matchPercent || 0}%)</div>
-                    <div class="stat-item">✏️ Графические: <strong>${s.graphic || 0}</strong></div>
-                    <div class="stat-item">🗣️ Фонетические: <strong>${s.phonetic || 0}</strong></div>
-                    <div class="stat-item">📐 Морфологические: <strong>${s.morph || 0}</strong></div>
-                    <div class="stat-item">📚 Лексические: <strong>${s.lexical || 0}</strong></div>
-                    <div class="stat-item">➕ Вставки: <strong>${s.insertion || 0}</strong></div>
-                    <div class="stat-item">➖ Удаления: <strong>${s.deletion || 0}</strong></div>
-                </div>`;
-            }
-            
-            // Легенда
-            html += `
-            <div class="legend">
-                <div class="legend-item"><div class="legend-color" style="background: #fde2e4; border-left: 3px solid #c0392b;"></div> Графические</div>
-                <div class="legend-item"><div class="legend-color" style="background: #fff3cd; border-left: 3px solid #d4a017;"></div> Фонетические</div>
-                <div class="legend-item"><div class="legend-color" style="background: #d4edda; border-left: 3px solid #27ae60;"></div> Морфологические</div>
-                <div class="legend-item"><div class="legend-color" style="background: #e2d5f1; border-left: 3px solid #8e44ad;"></div> Лексические</div>
-                <div class="legend-item"><div class="legend-color" style="background: #ffe5e0; border-left: 3px solid #e74c3c;"></div> Вставки</div>
-            </div>`;
-            
-            // Таблица
-            const maxDisplay = Math.min(data.alignment.length, 100);
-            html += `<h3>📖 Пословное выравнивание (${maxDisplay} из ${data.alignment.length} строк)</h3>`;
-            html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
-            html += '<table class="alignment-table"><thead><tr><th>№</th>';
-            
-            data.manuscript_names.forEach((name, i) => {
-                html += `<th>${name}${i === 0 ? ' ★' : ''}</th>`;
-            });
-            
-            html += '<th>Тип</th></tr></thead><tbody>';
-            
-            const colors = {
-                'graphic': '#c0392b',
-                'phonetic': '#d4a017',
-                'morph': '#27ae60',
-                'lexical': '#8e44ad',
-                'insertion': '#e74c3c',
-                'deletion': '#636e72'
-            };
-            
-            const labels = {
-                'graphic': 'ГР',
-                'phonetic': 'ФН',
-                'morph': 'МФ',
-                'lexical': 'ЛК',
-                'insertion': 'ВСТ',
-                'deletion': 'УД'
-            };
-            
-            const classMap = {
-                'graphic': 'diff-graphic',
-                'phonetic': 'diff-phonetic',
-                'morph': 'diff-morph',
-                'lexical': 'diff-lexical',
-                'insertion': 'diff-insertion',
-                'deletion': 'diff-deletion'
-            };
-            
-            for (let i = 0; i < maxDisplay; i++) {
-                const row = data.alignment[i];
-                html += '<tr>';
-                html += `<td><strong>${i + 1}</strong></td>`;
-                
-                for (let j = 0; j < row.length; j++) {
-                    const word = row[j];
-                    let cls = '';
-                    
-                    if (j > 0 && data.diff_types && data.diff_types[i]) {
-                        const dt = data.diff_types[i][j - 1];
-                        cls = classMap[dt] || '';
-                    }
-                    
-                    html += `<td class="${cls}">${escapeHtml(word || '—')}</td>`;
-                }
-                
-                // Типы
-                html += '<td>';
-                if (data.diff_types && data.diff_types[i]) {
-                    const types = [...new Set(data.diff_types[i].filter(t => t !== 'match'))];
-                    if (types.length > 0) {
-                        types.forEach(type => {
-                            html += `<span style="background:${colors[type]};color:white;padding:2px 6px;border-radius:4px;margin:1px;font-size:11px;display:inline-block;">${labels[type]}</span>`;
-                        });
-                    } else {
-                        html += '✓';
-                    }
-                }
-                html += '</td></tr>';
-            }
-            
-            html += '</tbody></table></div>';
-            
-            container.innerHTML = html;
+            h += '</tbody></table></div>';
+            c.innerHTML = h;
         }
-        
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        // ==================== ЭКСПОРТ ====================
-        
-        exportBtn.addEventListener('click', async () => {
+
+        // Экспорт
+        eb.onclick = async () => {
             if (!alignedData) return;
-            
-            progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Генерация XML...';
-            
-            try {
-                const response = await fetch('/export_tei', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: currentSessionId,
-                        data: alignedData
-                    })
-                });
-                
-                if (!response.ok) throw new Error('Ошибка экспорта');
-                
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'aligned_corpus.xml';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                progressDiv.style.display = 'none';
-                
-            } catch (err) {
-                progressDiv.innerHTML = '❌ Ошибка экспорта: ' + err.message;
-            }
-        });
+            const resp = await fetch('/export_tei', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ data: alignedData })
+            });
+            const blob = await resp.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'aligned_corpus.xml';
+            a.click();
+        };
     </script>
 </body>
 </html>
