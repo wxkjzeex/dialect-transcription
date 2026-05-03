@@ -1,4 +1,3 @@
-app.py
 import os
 import tempfile
 import uuid
