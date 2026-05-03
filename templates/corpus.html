@@ -940,26 +940,168 @@
                 const checked = diffTypesEnabled[f.id] ? 'checked' : '';
                 html += `<div class="diff-filter-item" onclick="toggleDiffType('${f.id}')"><input type="checkbox" id="diff_${f.id}" ${checked}><span class="color-badge" style="background: ${f.color};"></span><label for="diff_${f.id}">${f.name}</label></div>`;
             });
-            html += '</div><div style="margin-top: 12px;"><button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px; margin-right: 8px;">✓ Выбрать все</button><button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button></div></div>';
+            html += '</div>';
+            
+            // Добавляем переключатель режима
+            html += '<div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">';
+            html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px;">✓ Выбрать все</button>';
+            html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
+            html += '<label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: 8px;">';
+            html += '<input type="checkbox" id="filterModeCheckbox" onchange="toggleFilterMode()">';
+            html += '<span style="font-size: 13px; color: #4a3d2c;">🔍 Показывать только строки с разночтениями</span>';
+            html += '</label>';
+            html += '</div>';
+            
+            html += '</div>';
             return html;
         }
+
         
         window.toggleDiffType = function(type) {
             const checkbox = document.getElementById(`diff_${type}`);
-            if (checkbox) { diffTypesEnabled[type] = checkbox.checked; applyDiffHighlights(); }
+            if (checkbox) {
+                diffTypesEnabled[type] = checkbox.checked;
+                
+                // Если сняли все галочки — выключаем режим фильтрации
+                const anyChecked = Object.values(diffTypesEnabled).some(v => v);
+                if (!anyChecked && filterModeOnlyDiffs) {
+                    filterModeOnlyDiffs = false;
+                    const filterCheckbox = document.getElementById('filterModeCheckbox');
+                    if (filterCheckbox) filterCheckbox.checked = false;
+                }
+                
+                applyRowFiltering();
+            }
         };
         
         window.selectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = true);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = true);
-            applyDiffHighlights();
+            applyRowFiltering();
         };
         
         window.deselectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
-            applyDiffHighlights();
+            // Выключаем режим фильтрации
+            filterModeOnlyDiffs = false;
+            const filterCheckbox = document.getElementById('filterModeCheckbox');
+            if (filterCheckbox) filterCheckbox.checked = false;
+            applyRowFiltering();
         };
+
+        // Режим фильтрации: true = показывать только строки с разночтениями, false = показывать все
+        let filterModeOnlyDiffs = false;
+        
+        window.toggleFilterMode = function() {
+            filterModeOnlyDiffs = document.getElementById('filterModeCheckbox').checked;
+            applyRowFiltering();
+        };
+        
+        // Проверяет, есть ли в строке хотя бы один включенный тип разночтения
+        function rowHasEnabledDiffType(rowIndex) {
+            if (!alignedData) return true;
+            
+            const mainWord = alignedData.mainWords[rowIndex];
+            let hasDiff = false;
+            
+            for (let j = 0; j < alignedData.alignments.length; j++) {
+                const alignment = alignedData.alignments[j];
+                const pair = alignment[rowIndex];
+                if (!pair) continue;
+                
+                const otherWord = pair.other || '—';
+                const diffType = detectWordDiffType(mainWord, otherWord);
+                
+                if (diffType && diffTypesEnabled[diffType]) {
+                    hasDiff = true;
+                    break;
+                }
+            }
+            
+            return hasDiff;
+        }
+        
+        // Применяет фильтрацию строк и подсветку
+        function applyRowFiltering() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
+                
+                const mainWord = alignedData.mainWords[i];
+                let hasVisibleDiff = false;
+                
+                // Сначала применяем подсветку к ячейкам
+                const cells = row.querySelectorAll('td.verse-text');
+                cells.forEach(cell => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    if (colIdx === 0) return; // Главный список не трогаем
+                    
+                    const listIdx = colIdx - 1;
+                    const alignment = alignedData.alignments[listIdx];
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    // Очищаем классы
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax', 'diff-insertion', 'diff-deletion');
+                    
+                    if (diffType) {
+                        // Подсвечиваем только если тип включен
+                        if (diffTypesEnabled[diffType]) {
+                            cell.classList.add(getDiffClass(diffType));
+                            hasVisibleDiff = true;
+                        }
+                    }
+                });
+                
+                // Скрываем или показываем строку
+                if (filterModeOnlyDiffs) {
+                    // В режиме фильтрации показываем только строки с разночтениями
+                    row.style.display = hasVisibleDiff ? '' : 'none';
+                } else {
+                    // В обычном режиме показываем все
+                    row.style.display = '';
+                }
+            }
+            
+            // Обновляем счетчик видимых строк
+            updateVisibleRowsCount();
+        }
+        
+        // Счетчик видимых строк
+        function updateVisibleRowsCount() {
+            if (!filterModeOnlyDiffs) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (row.style.display !== 'none') visibleCount++;
+            });
+            
+            // Добавляем информацию о количестве
+            let counterEl = document.getElementById('visibleRowsCounter');
+            if (!counterEl) {
+                counterEl = document.createElement('div');
+                counterEl.id = 'visibleRowsCounter';
+                counterEl.style.cssText = 'margin: 8px 0; padding: 8px 12px; background: #e8ddd0; border-radius: 8px; font-size: 13px; color: #3e3225;';
+                const table = document.querySelector('.alignment-table');
+                if (table) table.parentNode.insertBefore(counterEl, table);
+            }
+            counterEl.textContent = `🔍 Показано ${visibleCount} из ${alignedData.mainWords.length} строк (с выбранными типами разночтений)`;
+            
+            if (!filterModeOnlyDiffs) {
+                if (counterEl) counterEl.style.display = 'none';
+            } else {
+                if (counterEl) counterEl.style.display = '';
+            }
+        }
         
         function renderColumnToggles() {
             if (!alignedData) return '';
@@ -1021,26 +1163,8 @@
         };
         
         function applyDiffHighlights() {
-            if (!alignedData) return;
-            const rows = document.querySelectorAll('.alignment-table tbody tr');
-            for (let i = 0; i < alignedData.mainWords.length; i++) {
-                const row = rows[i];
-                if (!row) continue;
-                const cells = row.querySelectorAll('td.verse-text');
-                const mainWord = alignedData.mainWords[i];
-                cells.forEach(cell => {
-                    const colIdx = parseInt(cell.dataset.col);
-                    if (colIdx === 0) return;
-                    const listIdx = colIdx - 1;
-                    const alignment = alignedData.alignments[listIdx];
-                    const pair = alignment[i];
-                    if (!pair) return;
-                    const otherWord = pair.other || '—';
-                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax', 'diff-insertion', 'diff-deletion');
-                    const diffType = detectWordDiffType(mainWord, otherWord);
-                    if (diffType && diffTypesEnabled[diffType]) cell.classList.add(getDiffClass(diffType));
-                });
-            }
+            // Теперь используем новую функцию, которая и подсвечивает и фильтрует
+            applyRowFiltering();
         }
         
         let dragSourceIndex = null;
