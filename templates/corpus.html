@@ -455,6 +455,241 @@
 
     <script>
         
+        // ==================== НОВЫЕ ФУНКЦИИ ИЗ HISTORY-PARALLEL-CORPUS ====================
+        
+        // Нормализация для лемм
+        function normLemma(s) {
+            return String(s || "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+        
+        // Нормализация графическая
+        function normGraphic(s) {
+            return String(s || "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+        
+        // Нормализация фонетическая
+        function normPhonetic(s) {
+            let t = normGraphic(s);
+            
+            // приведение частых графем (упрощённо, чтобы попадать в "Графическое/Фон.")
+            const map = [
+                [/ѣ/g, "е"], [/і/g, "и"], [/ѳ/g, "ф"], [/ѵ/g, "и"],
+                [/ꙗ/g, "я"], [/ꙋ/g, "у"], [/ѫ/g, "у"], [/ѧ/g, "я"],
+                [/ѯ/g, "кс"], [/ѱ/g, "пс"],
+                [/ѡ/g, "о"],
+            ];
+            for (const [re, rep] of map) t = t.replace(re, rep);
+
+            // убираем финальные редуцированные (грубая нормализация)
+            t = t.replace(/ъ\b/g, "").replace(/ь\b/g, "");
+            return t.replace(/\s+/g, " ").trim();
+        }
+
+        // Расстояние Левенштейна (оптимизированное)
+        function levenshtein(a, b) {
+            const n = a.length, m = b.length;
+            if (n === 0) return m;
+            if (m === 0) return n;
+
+            const prev = new Uint16Array(m + 1);
+            const curr = new Uint16Array(m + 1);
+            for (let j = 0; j <= m; j++) prev[j] = j;
+
+            for (let i = 1; i <= n; i++) {
+                curr[0] = i;
+                const ai = a.charCodeAt(i - 1);
+                for (let j = 1; j <= m; j++) {
+                    const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+                    curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+                }
+                prev.set(curr);
+            }
+            return prev[m];
+        }
+
+        // Мера схожести строк
+        function similarity(a, b) {
+            if (!a && !b) return 1;
+            if (!a || !b) return 0;
+            const aa = a.slice(0, 80);
+            const bb = b.slice(0, 80);
+            const d = levenshtein(aa, bb);
+            const maxLen = Math.max(aa.length, bb.length);
+            return maxLen === 0 ? 1 : (1 - d / maxLen);
+        }
+
+        // Сравнение токенов
+        function tokenSimilarity(aTok, bTok) {
+            // 0..1
+            if (!aTok || !bTok) return 0;
+
+            const la = normLemma(aTok.lemma || aTok.form || "");
+            const lb = normLemma(bTok.lemma || bTok.form || "");
+            if (la && lb && la === lb) return 1.0;
+
+            const a = normPhonetic(aTok.form || aTok);
+            const b = normPhonetic(bTok.form || bTok);
+            return similarity(a, b);
+        }
+
+        // Классификация пары слов
+        function classifyPair(masterTok, otherTok) {
+            // Возвращает:
+            // { label: "Идентично|Пропуск|Графическое/Фон.|Морфологическое|Синтаксическое|Лексическое",
+            //   types: Set(["graphic","phonetic","morph","syntax","lexical"]) }
+            if (!otherTok) return { label: "Пропуск", types: new Set() };
+
+            const A = normGraphic(masterTok?.form || masterTok);
+            const B = normGraphic(otherTok?.form || otherTok);
+
+            if (A && B && A === B) return { label: "Идентично", types: new Set() };
+
+            const sim = similarity(normPhonetic(masterTok?.form || masterTok), normPhonetic(otherTok?.form || otherTok));
+            const la = normLemma(masterTok?.lemma || masterTok?.form || masterTok);
+            const lb = normLemma(otherTok?.lemma || otherTok?.form || otherTok);
+            const lemmaEq = la && lb && la === lb;
+
+            // "Графическое/Фон." — если формы достаточно близки
+            if (sim >= 0.78) {
+                return { label: "Графическое/Фон.", types: new Set(["graphic", "phonetic"]) };
+            }
+
+            // Если лемма совпадает, но формы не близки → "Морфологическое"
+            if (lemmaEq) {
+                return { label: "Морфологическое", types: new Set(["morph"]) };
+            }
+
+            // "Синтаксическое" на уровне одного слова почти не детектируется,
+            // оставим тип как резерв, но здесь не используем.
+            return { label: "Лексическое", types: new Set(["lexical"]) };
+        }
+
+        // Выравнивание слов к мастер-тексту
+        function alignWordsToMaster(masterWords, witnessWords) {
+            const n = masterWords.length;
+            const m = witnessWords.length;
+            if (n === 0) return [];
+            if (m === 0) return Array(n).fill(null);
+
+            // Защита от слишком тяжёлого DP в браузере
+            const cells = (n + 1) * (m + 1);
+            if (cells > 4_500_000) {
+                return greedyAlign(masterWords, witnessWords);
+            }
+
+            const GAP = 0.70;
+
+            // dp: минимальная "стоимость"
+            const dp = Array.from({ length: n + 1 }, () => new Float32Array(m + 1));
+            // bt: 1=diag(match), 2=up(gap in witness), 3=left(skip witness word)
+            const bt = Array.from({ length: n + 1 }, () => new Uint8Array(m + 1));
+
+            for (let i = 1; i <= n; i++) { dp[i][0] = dp[i - 1][0] + GAP; bt[i][0] = 2; }
+            for (let j = 1; j <= m; j++) { dp[0][j] = dp[0][j - 1] + GAP; bt[0][j] = 3; }
+
+            function matchCost(a, b) {
+                // cost = 1 - similarity
+                const sim = tokenSimilarity(a, b); // 0..1
+                return 1.0 - sim;
+            }
+
+            for (let i = 1; i <= n; i++) {
+                const a = masterWords[i - 1];
+                for (let j = 1; j <= m; j++) {
+                    const b = witnessWords[j - 1];
+
+                    const diag = dp[i - 1][j - 1] + matchCost(a, b);
+                    const up = dp[i - 1][j] + GAP;
+                    const left = dp[i][j - 1] + GAP;
+
+                    let best = diag, dir = 1;
+                    if (up < best) { best = up; dir = 2; }
+                    if (left < best) { best = left; dir = 3; }
+
+                    dp[i][j] = best;
+                    bt[i][j] = dir;
+                }
+            }
+
+            const mapping = Array(n).fill(null);
+            let i = n, j = m;
+            while (i > 0 || j > 0) {
+                const dir = bt[i][j];
+                if (dir === 1) { mapping[i - 1] = j - 1; i--; j--; }
+                else if (dir === 2) { mapping[i - 1] = null; i--; }
+                else { j--; }
+            }
+
+            // Постфильтр: слишком слабые совпадения превращаем в пропуск
+            for (let k = 0; k < mapping.length; k++) {
+                const j2 = mapping[k];
+                if (j2 === null || j2 === undefined) continue;
+                const sim = tokenSimilarity(masterWords[k], witnessWords[j2]);
+                // если леммы совпали, оставим даже при низкой похожести формы
+                const lemmaA = normLemma(masterWords[k].lemma || masterWords[k].form || "");
+                const lemmaB = normLemma(witnessWords[j2].lemma || witnessWords[j2].form || "");
+                const lemmaEq = lemmaA && lemmaB && lemmaA === lemmaB;
+
+                if (!lemmaEq && sim < 0.34) mapping[k] = null;
+            }
+
+            return mapping;
+        }
+
+        // Сдвиг маппинга
+        function shiftMapping(mapping, masterIndex, delta, witnessLen) {
+            const curr = mapping[masterIndex];
+
+            let base = curr;
+            if (base === null || base === undefined) {
+                base = Math.min(Math.max(masterIndex, 0), Math.max(0, witnessLen - 1));
+            }
+
+            let next = base + delta;
+            if (next < 0) next = 0;
+            if (next >= witnessLen) next = witnessLen - 1;
+
+            mapping[masterIndex] = next;
+        }
+
+        // Жадное выравнивание для больших текстов
+        function greedyAlign(masterWords, witnessWords) {
+            const mapping = Array(masterWords.length).fill(null);
+            let j = 0;
+
+            for (let i = 0; i < masterWords.length; i++) {
+                const a = masterWords[i];
+                let bestJ = null;
+                let bestSim = -1;
+
+                const start = Math.max(0, j - 10);
+                const end = Math.min(witnessWords.length - 1, j + 80);
+
+                for (let k = start; k <= end; k++) {
+                    const sim = tokenSimilarity(a, witnessWords[k]);
+                    if (sim > bestSim) { bestSim = sim; bestJ = k; }
+                }
+
+                if (bestJ !== null && bestSim >= 0.50) {
+                    mapping[i] = bestJ;
+                    j = bestJ + 1;
+                } else {
+                    mapping[i] = null;
+                }
+            }
+            return mapping;
+        }
+
         // Настройки отображения типов разночтений
         let diffTypesEnabled = {
             graphic: true,
@@ -468,7 +703,7 @@
         let columnVisibility = []; // true = показывать, false = скрыть
         let columnOrder = []; // индексы в порядке отображения
         let alignedData = null;
-        
+
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
@@ -478,7 +713,7 @@
         const progressDiv = document.getElementById('progress');
         const folioStart = document.getElementById('folioStart');
         const folioEnd = document.getElementById('folioEnd');
-        
+
         // Drag & drop
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => {
@@ -497,19 +732,19 @@
             handleFiles(e.dataTransfer.files);
         });
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-        
+
         // Функция извлечения текста из XML
         function extractTextFromXML(xmlString) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(xmlString, 'application/xml');
-            
+
             const words = [];
             const sheets = [];
             let currentSheet = null;
-            
+
             // Проходим по всем элементам в порядке их следования
             const allElements = doc.querySelectorAll('*');
-            
+
             for (let el of allElements) {
                 // Отслеживаем листы
                 if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
@@ -521,7 +756,7 @@
                         }
                     }
                 }
-                
+
                 // Собираем текст из w и pc
                 if (el.tagName === 'w' || el.tagName === 'pc') {
                     const t = el.textContent.trim();
@@ -530,25 +765,25 @@
                     }
                 }
             }
-            
+
             return {
                 fullText: words.join(' '),
                 words: words,
                 sheets: sheets
             };
         }
-        
+
         // Фильтрация текста по листам
         function filterTextBySheets(data, startSheet, endSheet) {
             if (!startSheet || !endSheet) return data.fullText;
-            
+
             const start = parseInt(startSheet);
             const end = parseInt(endSheet);
-            
+
             // Находим индексы слов для указанных листов
             let startIdx = 0;
             let endIdx = data.words.length;
-            
+
             for (let sheet of data.sheets) {
                 if (sheet.sheet === start) {
                     startIdx = sheet.index;
@@ -558,10 +793,10 @@
                     break;
                 }
             }
-            
+
             return data.words.slice(startIdx, endIdx).join(' ');
         }
-        
+
         async function handleFiles(files) {
             for (let file of files) {
                 if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
@@ -569,27 +804,27 @@
                 }
             }
             renderFileList();
-            
+
             if (uploadedFiles.length > 0) {
                 progressDiv.style.display = 'block';
                 progressDiv.className = 'progress';
                 progressDiv.innerHTML = '⏳ Парсинг XML-файлов...';
-                
+
                 manuscripts = [];
-                
+
                 for (let i = 0; i < uploadedFiles.length; i++) {
                     const file = uploadedFiles[i];
                     progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
-                    
+
                     try {
                         const xmlText = await file.text();
                         const extracted = extractTextFromXML(xmlText);
-                        
+
                         manuscripts.push({
                             name: file.name,
                             data: extracted,
                         });
-                        
+
                     } catch (err) {
                         console.error('Ошибка парсинга:', file.name, err);
                         manuscripts.push({
@@ -598,14 +833,14 @@
                         });
                     }
                 }
-                
+
                 progressDiv.innerHTML = '✅ Парсинг завершён!';
                 setTimeout(() => { progressDiv.style.display = 'none'; }, 1500);
             }
-            
+
             updateUI();
         }
-        
+
         function renderFileList() {
             if (uploadedFiles.length === 0) {
                 fileList.innerHTML = '';
@@ -621,364 +856,86 @@
                 `;
             });
             fileList.innerHTML = html;
-            
+
             let options = '<option value="">Выберите главный список</option>';
             uploadedFiles.forEach((file, index) => {
                 options += `<option value="${index}">${file.name}</option>`;
             });
             mainMsSelect.innerHTML = options;
         }
-        
+
         window.removeFile = function(index) {
             uploadedFiles.splice(index, 1);
             manuscripts.splice(index, 1);
             renderFileList();
             updateUI();
         };
-        
+
         function updateUI() {
             alignBtn.disabled = uploadedFiles.length < 2;
             exportBtn.disabled = !alignedData;
             mainMsSelect.disabled = uploadedFiles.length < 2;
         }
-        
+
         function alignMultiple(mainWords, otherWordsArray) {
-            const allLists = [mainWords, ...otherWordsArray];
-            const numLists = allLists.length;
-            
-            // Функция: выровнять две последовательности, вернуть [seq1_aligned, seq2_aligned]
-            function alignTwo(seq1, seq2) {
-                return needlemanWunsch(seq1, seq2);
-            }
-            
-            // Строим направляющее дерево: выравниваем все с первым (главным)
-            // и запоминаем позиции вставок в главном
+            // Преобразуем слова в объекты с формой и леммой (для совместимости с tokenSimilarity)
+            const mainTokens = mainWords.map(w => ({ form: w, lemma: w }));
+
             const alignments = [];
-            let masterGaps = new Set(); // позиции в главном, где нужен пропуск
-            
+
             for (let i = 0; i < otherWordsArray.length; i++) {
-                const [alignedMain, alignedOther] = alignTwo(mainWords, otherWordsArray[i]);
-                
-                // Отмечаем позиции, где в alignedMain появились пропуски (вставки в другом списке)
-                for (let pos = 0; pos < alignedMain.length; pos++) {
-                    if (alignedMain[pos] === '—') {
-                        masterGaps.add(pos);
-                    }
-                }
-                
-                alignments.push({ main: alignedMain, other: alignedOther });
-            }
-            
-            // Получаем отсортированный список позиций пропусков
-            const gapPositions = Array.from(masterGaps).sort((a, b) => a - b);
-            
-            // Строим единую матрицу: для каждого списка создаем массив слов,
-            // вставляя пропуски в нужных местах
-            const maxAlignedLen = Math.max(
-                mainWords.length + gapPositions.length,
-                ...alignments.map(a => a.main.length)
-            );
-            
-            // Создаем расширенный главный список с пропусками
-            const expandedMain = [];
-            let mainIdx = 0;
-            let gapIdx = 0;
-            
-            for (let pos = 0; pos < maxAlignedLen; pos++) {
-                if (gapIdx < gapPositions.length && gapPositions[gapIdx] === pos) {
-                    expandedMain.push('—');
-                    gapIdx++;
-                } else if (mainIdx < mainWords.length) {
-                    expandedMain.push(mainWords[mainIdx]);
-                    mainIdx++;
-                } else {
-                    expandedMain.push('—');
-                }
-            }
-            
-            // Создаем выровненные списки для остальных
-            const expandedOthers = alignments.map(align => {
-                const result = [];
-                let otherIdx = 0;
-                
-                for (let pos = 0; pos < expandedMain.length; pos++) {
-                    if (expandedMain[pos] === '—') {
-                        // В главном пропуск — в другом может быть слово
-                        if (otherIdx < align.other.length) {
-                            // Ищем соответствующее слово
-                            const word = align.other[otherIdx];
-                            // Проверяем, не соответствует ли это слово пропуску в главном
-                            if (pos < align.main.length && align.main[pos] === '—') {
-                                result.push(word);
-                                otherIdx++;
-                            } else {
-                                result.push('—');
-                            }
-                        } else {
-                            result.push('—');
-                        }
+                const witnessTokens = otherWordsArray[i].map(w => ({ form: w, lemma: w }));
+
+                // Используем новый алгоритм выравнивания
+                const mapping = alignWordsToMaster(mainTokens, witnessTokens);
+
+                // Преобразуем mapping в формат alignments
+                const alignment = [];
+                for (let j = 0; j < mainTokens.length; j++) {
+                    const mappedIdx = mapping[j];
+                    if (mappedIdx !== null && mappedIdx !== undefined) {
+                        alignment.push({ other: witnessTokens[mappedIdx].form });
                     } else {
-                        // В главном слово — в другом должно быть соответствие
-                        if (otherIdx < align.other.length) {
-                            result.push(align.other[otherIdx]);
-                            otherIdx++;
-                        } else {
-                            result.push('—');
-                        }
+                        alignment.push({ other: '—' });
                     }
                 }
-                
-                return result;
-            });
-            
+
+                alignments.push(alignment);
+            }
+
             return {
-                mainWords: expandedMain,
-                alignments: expandedOthers.map(arr =>
-                    arr.map(word => ({ other: word }))
-                )
+                mainWords: mainWords,
+                alignments: alignments
             };
         }
 
-        
-        // ==================== ЛЕВЕНШТЕЙН ====================
-        function levenshtein(a, b) {
-            const dp = Array.from({ length: a.length + 1 }, () =>
-                Array(b.length + 1).fill(0)
-            );
-        
-            for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-            for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-        
-            for (let i = 1; i <= a.length; i++) {
-                for (let j = 1; j <= b.length; j++) {
-                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-                    dp[i][j] = Math.min(
-                        dp[i - 1][j] + 1,
-                        dp[i][j - 1] + 1,
-                        dp[i - 1][j - 1] + cost
-                    );
-                }
-            }
-        
-            return dp[a.length][b.length];
-        }
+        // ==================== ОПРЕДЕЛЕНИЕ ТИПА РАЗНОЧТЕНИЯ ====================
+        // Используем новую функцию classifyPair из history-parallel-corpus
 
-        // ==================== НОРМАЛИЗАЦИЯ ====================
-        function normalize(word) {
-            if (!word || word === '—') return '';
-        
-            return word.toLowerCase()
-                .replace(/[·⸱※∽⁘:.,;!?]+/g, '')
-                .replace(/[҃҄҅҆]/g, '')
-                .replace(/[ъь]$/, '')
-                .replace(/[ѣ]/g, 'е')
-                .replace(/[іѵї]/g, 'и')
-                .replace(/[ѡꙩ]/g, 'о')
-                .replace(/[ѧꙗ]/g, 'я')
-                .replace(/[ѳ]/g, 'ф')
-                .replace(/[ꙋѹоу]/g, 'у');
-        }
-
-        // ==================== УМНАЯ МЕТРИКА ====================
-        function similarity(a, b) {
-            const MATCH = 6;
-            const PARTIAL = 2;
-            const MISMATCH = -4;
-        
-            const na = normalize(a);
-            const nb = normalize(b);
-        
-            if (!na && !nb) return 0;
-            if (na === nb) return MATCH;
-        
-            // ЯКОРЯ
-            const anchors = ['и','же','въ','не','на','къ','съ','от','за','яко'];
-            if (anchors.includes(na) && anchors.includes(nb)) {
-                return MATCH;
-            }
-        
-            const dist = levenshtein(na, nb);
-            const maxLen = Math.max(na.length, nb.length);
-        
-            if (maxLen === 0) return 0;
-        
-            const ratio = dist / maxLen;
-        
-            if (ratio < 0.25) return PARTIAL;
-            if (ratio < 0.5) return 0;
-        
-            return MISMATCH;
-        }
-
-        // ==================== NEEDLEMAN-WUNSCH ====================
-        function needlemanWunsch(seq1, seq2) {
-            const GAP = -6;
-        
-            const n = seq1.length;
-            const m = seq2.length;
-        
-            const dp = Array.from({ length: n + 1 }, () =>
-                Array(m + 1).fill(0)
-            );
-        
-            const trace = Array.from({ length: n + 1 }, () =>
-                Array(m + 1).fill(null)
-            );
-        
-            for (let i = 1; i <= n; i++) {
-                dp[i][0] = i * GAP;
-                trace[i][0] = 'up';
-            }
-        
-            for (let j = 1; j <= m; j++) {
-                dp[0][j] = j * GAP;
-                trace[0][j] = 'left';
-            }
-        
-            for (let i = 1; i <= n; i++) {
-                for (let j = 1; j <= m; j++) {
-        
-                    const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
-                    const del = dp[i - 1][j] + GAP;
-                    const ins = dp[i][j - 1] + GAP;
-        
-                    const max = Math.max(match, del, ins);
-                    dp[i][j] = max;
-        
-                    if (max === match) trace[i][j] = 'diag';
-                    else if (max === del) trace[i][j] = 'up';
-                    else trace[i][j] = 'left';
-                }
-            }
-        
-            let i = n, j = m;
-            const aligned1 = [];
-            const aligned2 = [];
-        
-            while (i > 0 || j > 0) {
-                if (i > 0 && j > 0 && trace[i][j] === 'diag') {
-                    aligned1.unshift(seq1[i - 1]);
-                    aligned2.unshift(seq2[j - 1]);
-                    i--; j--;
-                } else if (i > 0 && trace[i][j] === 'up') {
-                    aligned1.unshift(seq1[i - 1]);
-                    aligned2.unshift('—');
-                    i--;
-                } else {
-                    aligned1.unshift('—');
-                    aligned2.unshift(seq2[j - 1]);
-                    j--;
-                }
-            }
-        
-            return [aligned1, aligned2];
-        }
-                // ==================== КОНСТАНТЫ ДЛЯ ОПРЕДЕЛЕНИЯ РАЗНОЧТЕНИЙ ====================
-        
-        // Графические пары (разные буквы для одного звука)
-        const GRAPHIC_PAIRS = [
-            ['ѹ', 'у'], ['ꙋ', 'у'], ['оу', 'у'],
-            ['ѡ', 'о'], ['ꙩ', 'о'],
-            ['ѣ', 'е'], ['ꙗ', 'я'], ['ѧ', 'я'],
-            ['і', 'и'], ['ї', 'и'], ['ѵ', 'и'],
-            ['ѳ', 'ф'], ['ѯ', 'кс'], ['ѱ', 'пс'],
-            ['ꙁ', 'з'], ['ѕ', 'з'],
-            ['ꙑ', 'ы'], ['ꙓ', 'е'],
-            ['҃', ''], ['҄', ''], ['҅', ''], ['҆', ''], // титла
-            ['·', ''], ['⸱', ''], ['※', ''], ['∽', '']
-        ];
-        
-        // Фонетические признаки (чередования)
-        const PHONETIC_PATTERNS = [
-            ['оро', 'ра'], ['оло', 'ла'], ['ере', 'ре'], ['ело', 'ле'], // полногласие
-            ['жд', 'ж'], ['щ', 'ч'], ['ц', 'ч'], ['з', 'ж'], ['с', 'ш'],
-            ['г', 'ж'], ['к', 'ч'], ['х', 'ш']
-        ];
-        
-        // Морфологические окончания
-        const MORPH_ENDINGS = [
-            ['ъ', ''], ['ь', ''],
-            ['ого', 'ова'], ['его', 'ева'],
-            ['ыя', 'ой'], ['ия', 'ей'],
-            ['ти', 'ть'], ['щи', 'чь'],
-            ['аго', 'ого'], ['яго', 'его'],
-            ['ѣ', 'е']
-        ];
-        
-        function normalizeText(text) {
-            if (!text) return '';
-            return text.toLowerCase()
-                .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
-                .replace(/[҃҄҅҆]/g, '')
-                .trim();
-        }
-
-        function getDiffClass(type) {
-            if (!type) return '';
-            const classes = {
-                'graphic': 'diff-graphic',
-                'phonetic': 'diff-phonetic',
-                'morph': 'diff-morph',
-                'lexical': 'diff-lexical',
-                'syntax': 'diff-syntax',
-                'insertion': 'diff-insertion',
-                'deletion': 'diff-deletion'
-            };
-            return classes[type] || '';
-        }
-
-         // ==================== ОПРЕДЕЛЕНИЕ ТИПА РАЗНОЧТЕНИЯ ====================
-        
-                function detectWordDiffType(mainWord, otherWord) {
+        function detectWordDiffType(mainWord, otherWord) {
             if (!mainWord || !otherWord) return null;
-            if (mainWord === otherWord) return null;
-            if (mainWord === '—' || otherWord === '—') return 'insertion';
-            
-            // Нормализация ОБОИХ слов
-            const normMain = normalizeText(mainWord);
-            const normOther = normalizeText(otherWord);
-            
-            if (normMain === normOther) return null;
-            
-            // Графические
-            let mainNoGraphic = normMain;
-            let otherNoGraphic = normOther;
-            for (let [old, new_] of GRAPHIC_PAIRS) {
-                const regex = new RegExp(old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                mainNoGraphic = mainNoGraphic.replace(regex, new_);
-                otherNoGraphic = otherNoGraphic.replace(regex, new_);
+            if (mainWord === "—" || otherWord === "—") {
+                if (mainWord === "—" && otherWord === "—") return null;
+                return "insertion";
             }
-            if (mainNoGraphic === otherNoGraphic) {
-                return 'graphic';
+
+            // Создаём объекты токенов для classifyPair
+            const mainTok = { form: mainWord, lemma: mainWord };
+            const otherTok = { form: otherWord, lemma: otherWord };
+
+            // Используем новую функцию классификации
+            const result = classifyPair(mainTok, otherTok);
+
+            // Преобразуем результат в формат типов
+            if (result.label === "Идентично") return null;
+            if (result.label === "Пропуск") return "insertion";
+            if (result.types.has("graphic") || result.types.has("phonetic")) {
+                return result.types.has("graphic") ? "graphic" : "phonetic";
             }
-            
-            // Фонетические
-            for (let [p1, p2] of PHONETIC_PATTERNS) {
-                if ((normMain.includes(p1) && normOther.includes(p2)) || 
-                    (normMain.includes(p2) && normOther.includes(p1))) {
-                    return 'phonetic';
-                }
-            }
-            
-            // Морфологические: общая основа > 3 букв
-            let commonPrefix = '';
-            for (let i = 0; i < Math.min(mainNoGraphic.length, otherNoGraphic.length); i++) {
-                if (mainNoGraphic[i] === otherNoGraphic[i]) {
-                    commonPrefix += mainNoGraphic[i];
-                } else {
-                    break;
-                }
-            }
-            
-            if (commonPrefix.length >= 3) {
-                const suffix1 = mainNoGraphic.slice(commonPrefix.length);
-                const suffix2 = otherNoGraphic.slice(commonPrefix.length);
-                if (suffix1.length <= 3 && suffix2.length <= 3) {
-                    return 'morph';
-                }
-            }
-            
-            return 'lexical';
+            if (result.types.has("morph")) return "morph";
+            if (result.types.has("lexical")) return "lexical";
+
+            return "lexical";
         }
 
         // Статистика разночтений
@@ -990,19 +947,19 @@
                 'lexical': 0,
                 'match': 0
             };
-            
+
             if (!alignedData) return stats;
-            
+
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 const mainWord = alignedData.mainWords[i];
-                
+
                 alignedData.alignments.forEach(alignment => {
                     const pair = alignment[i];
                     if (!pair) return;
-                    
+
                     const otherWord = pair.other || '—';
                     const diffType = detectWordDiffType(mainWord, otherWord);
-                    
+
                     if (diffType && stats[diffType] !== undefined) {
                         stats[diffType]++;
                     } else if (!diffType && mainWord === otherWord) {
@@ -1010,7 +967,7 @@
                     }
                 });
             }
-            
+
             return stats;
         }
 
@@ -1038,76 +995,76 @@
             };
             return labels[type] || type;
         }
-        
-        
+
+
         // ==================== НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ====================
-        
+
                alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
-            
+
             const mainIndex = parseInt(mainMsSelect.value);
             if (isNaN(mainIndex)) {
                 alert('Выберите главный список');
                 return;
             }
-            
+
             const startSheet = folioStart.value;
             const endSheet = folioEnd.value;
-            
+
             progressDiv.style.display = 'block';
             progressDiv.innerHTML = '⏳ Подготовка текста...';
-            
+
             const mainMs = manuscripts[mainIndex];
             const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
             const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
-            
+
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
-            
+
             progressDiv.innerHTML = '⏳ Множественное выравнивание...';
-            
+
             // Собираем слова из остальных списков
             const otherWordsArray = otherMss.map(ms => {
                 const text = ms.data.fullText;
                 return text.split(/\s+/).filter(w => w.length > 0);
             });
-            
+
             // Множественное выравнивание
             const { alignments, mainWords: newMainWords } = alignMultiple(mainWords, otherWordsArray);
-            
+
             alignedData = {
                 main: mainMs.name,
                 aligned: otherMss.map(m => m.name),
                 mainWords: newMainWords,
                 alignments: alignments
             };
-            
+
             progressDiv.style.display = 'none';
             renderWordAlignmentTable();
             exportBtn.disabled = false;
         });
 
         // ==================== ОТРИСОВКА ТАБЛИЦЫ ПОСЛОВНОГО ВЫРАВНИВАНИЯ ====================
-        
+
         function renderWordAlignmentTable() {
             const container = document.getElementById('alignmentResult');
             const startSheet = folioStart.value || '?';
             const endSheet = folioEnd.value || '?';
-            
+
             if (!alignedData) return;
-            
+
             initColumnOrder();
-            
+
             let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Пословное выравнивание</h3>';
             html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
             html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Слов в главном списке: ${alignedData.mainWords.length}</p>`;
             html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
-            
+
             // Статистика
             const stats = calculateDiffStats();
             html += '<div style="margin: 16px 0; padding: 16px; background: #f0eae2; border-radius: 12px;">';
             html += '<h4 style="margin-bottom: 12px;">📊 Статистика разночтений:</h4>';
             html += '<div style="display: flex; flex-wrap: wrap; gap: 16px;">';
-            
+
             const statLabels = {
                 'graphic': 'Графические',
                 'phonetic': 'Фонетические',
@@ -1115,7 +1072,7 @@
                 'lexical': 'Лексические',
                 'match': 'Совпадения'
             };
-            
+
             Object.entries(stats).forEach(([type, count]) => {
                 if (statLabels[type]) {
                     html += `<div style="display: flex; align-items: center; gap: 8px;">
@@ -1124,26 +1081,26 @@
                     </div>`;
                 }
             });
-            
+
             html += '</div></div>';
-            
+
             // Панель фильтрации типов разночтений
             html += renderDiffFilters();
-            
+
             // Панель выбора колонок
             html += renderColumnToggles();
-            
+
             // Таблица
             html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
             html += '<table class="alignment-table" style="min-width: 100%;">';
-            
+
             // Заголовки
             html += '<thead><tr>';
             html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;">№</th>';
-            
+
             // Все имена списков
             const allNames = [alignedData.main, ...alignedData.aligned];
-            
+
             // Заголовки в порядке columnOrder
             columnOrder.forEach((idx, pos) => {
                 const isMain = idx === 0;
@@ -1155,14 +1112,14 @@
                     html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10; width: 80px;">Тип</th>';
                 }
             });
-            
+
             html += '</tr></thead><tbody>';
-            
+
             // Строки таблицы
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 html += '<tr>';
                 html += '<td><strong>' + (i + 1) + '</strong></td>';
-                
+
                 columnOrder.forEach(idx => {
                     if (idx === 0) {
                         // Главный список
@@ -1175,7 +1132,7 @@
                         const otherWord = pair.other || '—';
                         const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
                         const diffClass = diffType ? getDiffClass(diffType) : '';
-                        
+
                         html += `<td class="verse-text ${diffClass}" data-col="${idx}" data-row="${i}">${escapeHtml(otherWord)}</td>`;
                         html += '<td style="font-size: 12px; color: #6b5a4a;">';
                         if (diffType) {
@@ -1186,12 +1143,12 @@
                         html += '</td>';
                     }
                 });
-                
+
                 html += '</tr>';
             }
-            
+
             html += '</tbody></table></div>';
-            
+
             // Кнопки
             html += `
                 <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
@@ -1209,27 +1166,27 @@
                     cell.addEventListener('click', function(e) {
                         // Не показываем контекст при двойном клике (редактирование)
                         if (this.classList.contains('editing')) return;
-                        
+
                         const word = this.textContent.trim();
                         if (!word || word === '—') return;
-                        
+
                         const colIdx = parseInt(this.dataset.col);
                         const allNames = [alignedData.main, ...alignedData.aligned];
                         const manuscriptName = allNames[colIdx];
-                        
+
                         if (manuscriptName) {
                             showContext(word, manuscriptName);
                         }
                     });
-                    
+
                     // Стиль курсора
                     cell.style.cursor = 'pointer';
                     cell.title = 'Нажмите для просмотра контекста';
                 });
             }, 100);
-            
+
             container.innerHTML = html;
-            
+
             // Навешиваем обработчики
             setupDragAndDrop();
             applyColumnVisibility();
@@ -1238,29 +1195,29 @@
         }
 
         // ==================== ЭКСПОРТ ====================
-        
+
         window.exportWordAlignmentCSV = function() {
             if (!alignedData) return;
-            
+
             let csv = '№,Главный список (' + alignedData.main + ')';
             alignedData.aligned.forEach(name => {
                 csv += ',' + name + ',Тип разночтения';
             });
             csv += '\n';
-            
+
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 csv += (i + 1) + ',"' + alignedData.mainWords[i] + '"';
-                
+
                 alignedData.alignments.forEach(alignment => {
                     const pair = alignment[i] || { other: '—' };
                     const otherWord = pair.other || '—';
                     const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
                     csv += ',"' + otherWord + '",' + (diffType || 'совпадение');
                 });
-                
+
                 csv += '\n';
             }
-            
+
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1276,7 +1233,7 @@
             text += `Морфологические: ${stats.morph}\n`;
             text += `Лексические: ${stats.lexical}\n`;
             text += `Совпадения: ${stats.match}\n`;
-            
+
             navigator.clipboard.writeText(text);
             alert('Статистика скопирована!');
         };
@@ -1285,17 +1242,17 @@
 
         function renderColumnToggles() {
             if (!alignedData) return '';
-            
+
             const allColumns = [alignedData.main, ...alignedData.aligned];
-            
+
             if (columnVisibility.length !== allColumns.length) {
                 columnVisibility = allColumns.map(() => true);
             }
-            
+
             let html = '<div class="column-toggles">';
             html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
             html += '<div class="column-toggles-list">';
-            
+
             allColumns.forEach((name, index) => {
                 const checked = columnVisibility[index] ? 'checked' : '';
                 const isMain = index === 0;
@@ -1307,11 +1264,11 @@
                     </div>
                 `;
             });
-            
+
             html += '</div></div>';
             return html;
         }
-        
+
         window.toggleColumn = function(index) {
             const checkbox = document.getElementById(`colToggle${index}`);
             if (checkbox) {
@@ -1319,15 +1276,15 @@
                 applyColumnVisibility();
             }
         };
-        
+
         function applyColumnVisibility() {
             if (!alignedData) return;
-            
+
             const table = document.querySelector('.alignment-table');
             if (!table) return;
-            
+
             const headers = table.querySelectorAll('thead th:not(:first-child)');
-            
+
             headers.forEach((th, idx) => {
                 const colIndex = parseInt(th.dataset.colIndex);
                 if (!columnVisibility[colIndex]) {
@@ -1336,7 +1293,7 @@
                     th.classList.remove('hidden-column');
                 }
             });
-            
+
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td:not(:first-child)');
@@ -1358,18 +1315,18 @@
                 columnOrder = Array.from({ length: totalCols }, (_, i) => i);
             }
         }
-        
+
         function moveColumn(fromIndex, toIndex) {
             if (fromIndex === 0 || toIndex === 0) {
                 alert('Главный список всегда должен быть первым');
                 return false;
             }
-            
+
             if (fromIndex === toIndex) return false;
-            
+
             const item = columnOrder.splice(fromIndex, 1)[0];
             columnOrder.splice(toIndex, 0, item);
-            
+
             return true;
         }
 
@@ -1377,7 +1334,7 @@
             if (!alignedData) return;
             const totalCols = 1 + alignedData.aligned.length;
             columnOrder = Array.from({ length: totalCols }, (_, i) => i);
-            
+
             renderWordAlignmentTable();
             alert('Порядок сброшен');
         };
@@ -1385,31 +1342,31 @@
         // Адаптированная подсветка для пословного режима
         function applyDiffHighlights() {
             if (!alignedData) return;
-            
+
             const rows = document.querySelectorAll('.alignment-table tbody tr');
-            
+
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 const row = rows[i];
                 if (!row) continue;
-                
+
                 const cells = row.querySelectorAll('td.verse-text');
                 const mainWord = alignedData.mainWords[i];
-                
+
                 cells.forEach((cell, cellIdx) => {
                     const colIdx = parseInt(cell.dataset.col);
                     if (colIdx === 0) return; // Главный список не подсвечиваем
-                    
+
                     const listIdx = colIdx - 1;
                     const alignment = alignedData.alignments[listIdx];
                     const pair = alignment[i];
                     if (!pair) return;
-                    
+
                     const otherWord = pair.other || '—';
-                    
+
                     cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
-                    
+
                     const diffType = detectWordDiffType(mainWord, otherWord);
-                    
+
                     if (diffType && diffTypesEnabled[diffType]) {
                         cell.classList.add(getDiffClass(diffType));
                     }
@@ -1431,29 +1388,29 @@
                 cell.addEventListener('dblclick', handleDoubleClick);
             });
         }
-        
+
         function handleDoubleClick(e) {
             const cell = e.currentTarget;
-            
+
             if (cell.classList.contains('editing')) return;
-            
+
             const originalText = cell.textContent;
             const rowIdx = parseInt(cell.dataset.row);
             const colIdx = parseInt(cell.dataset.col);
-            
+
             const textarea = document.createElement('textarea');
             textarea.value = originalText;
-            
+
             cell.classList.add('editing');
             cell.textContent = '';
             cell.appendChild(textarea);
             textarea.focus();
-            
+
             const save = () => {
                 const newText = textarea.value.trim() || originalText;
                 cell.textContent = newText;
                 cell.classList.remove('editing');
-                
+
                 // Обновляем alignedData
                 if (alignedData) {
                     if (colIdx === 0) {
@@ -1465,14 +1422,14 @@
                         }
                     }
                 }
-                
+
                 // Обновляем тип разночтения
                 updateDiffTypeForCell(rowIdx, colIdx);
                 exportBtn.disabled = false;
             };
-            
+
             textarea.addEventListener('blur', save);
-            
+
             textarea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault();
@@ -1487,21 +1444,21 @@
 
         function updateDiffTypeForCell(rowIdx, colIdx) {
             if (colIdx === 0) return;
-            
+
             const row = document.querySelectorAll('.alignment-table tbody tr')[rowIdx];
             if (!row) return;
-            
+
             const cells = row.querySelectorAll('td');
             const mainWord = alignedData.mainWords[rowIdx];
             const listIdx = colIdx - 1;
             const alignment = alignedData.alignments[listIdx];
             const pair = alignment[rowIdx];
-            
+
             if (!pair) return;
-            
+
             const otherWord = pair.other || '—';
             const diffType = detectWordDiffType(mainWord, otherWord);
-            
+
             // Находим ячейку с типом (следующая после текста)
             let typeCell = null;
             for (let i = 0; i < cells.length; i++) {
@@ -1510,7 +1467,7 @@
                     break;
                 }
             }
-            
+
             if (typeCell) {
                 if (diffType) {
                     typeCell.innerHTML = `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
@@ -1518,25 +1475,25 @@
                     typeCell.innerHTML = '✓';
                 }
             }
-            
+
             applyDiffHighlights();
         }
-        
+
         function updateAlignedDataFromTable() {
             if (!alignedData) return;
-            
+
             const rows = document.querySelectorAll('.alignment-table tbody tr');
-            
+
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 const row = rows[i];
                 if (!row) continue;
-                
+
                 const cells = row.querySelectorAll('td.verse-text');
-                
+
                 cells.forEach(cell => {
                     const colIdx = parseInt(cell.dataset.col);
                     const newText = cell.textContent.trim();
-                    
+
                     if (colIdx === 0) {
                         alignedData.mainWords[i] = newText;
                     } else {
@@ -1555,7 +1512,7 @@
             let html = '<div class="diff-filters">';
             html += '<div class="diff-filters-title">🔬 Типы разночтений:</div>';
             html += '<div class="diff-filters-list">';
-            
+
             const filters = [
                 { id: 'graphic', name: 'Графические', color: '#c0392b' },
                 { id: 'phonetic', name: 'Фонетические', color: '#d4a017' },
@@ -1563,7 +1520,7 @@
                 { id: 'lexical', name: 'Лексические', color: '#8e44ad' },
                 { id: 'syntax', name: 'Синтаксические', color: '#2980b9' }
             ];
-            
+
             filters.forEach(f => {
                 const checked = diffTypesEnabled[f.id] ? 'checked' : '';
                 html += `
@@ -1574,17 +1531,17 @@
                     </div>
                 `;
             });
-            
+
             html += '</div>';
             html += '<div style="margin-top: 12px;">';
             html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px; margin-right: 8px;">✓ Выбрать все</button>';
             html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
             html += '</div>';
             html += '</div>';
-            
+
             return html;
         }
-        
+
         window.toggleDiffType = function(type) {
             const checkbox = document.getElementById(`diff_${type}`);
             if (checkbox) {
@@ -1592,13 +1549,13 @@
                 applyDiffHighlights();
             }
         };
-        
+
         window.selectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = true);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = true);
             applyDiffHighlights();
         };
-        
+
         window.deselectAllDiffTypes = function() {
             Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
             document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
@@ -1607,10 +1564,10 @@
 
         // Drag & Drop функции
         let dragSourceIndex = null;
-        
+
         function setupDragAndDrop() {
             const headers = document.querySelectorAll('.alignment-table th.draggable');
-            
+
             headers.forEach(th => {
                 th.addEventListener('dragstart', handleDragStart);
                 th.addEventListener('dragend', handleDragEnd);
@@ -1620,74 +1577,74 @@
                 th.addEventListener('drop', handleDrop);
             });
         }
-        
+
         function handleDragStart(e) {
             const th = e.target.closest('th');
             if (!th) return;
-            
+
             dragSourceIndex = parseInt(th.dataset.colPos);
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', dragSourceIndex);
             th.classList.add('dragging');
         }
-        
+
         function handleDragEnd(e) {
             const th = e.target.closest('th');
             if (th) th.classList.remove('dragging');
-            
+
             document.querySelectorAll('.alignment-table th').forEach(h => {
                 h.classList.remove('drag-over');
             });
         }
-        
+
         function handleDragOver(e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
         }
-        
+
         function handleDragEnter(e) {
             const th = e.target.closest('th');
             if (th && th.classList.contains('draggable')) {
                 th.classList.add('drag-over');
             }
         }
-        
+
         function handleDragLeave(e) {
             const th = e.target.closest('th');
             if (th) th.classList.remove('drag-over');
         }
-        
+
         function handleDrop(e) {
             e.preventDefault();
-            
+
             const targetTh = e.target.closest('th');
             if (!targetTh) return;
-            
+
             targetTh.classList.remove('drag-over');
-            
+
             const targetIndex = parseInt(targetTh.dataset.colPos);
             const sourceIndex = dragSourceIndex;
-            
+
             if (sourceIndex === null || sourceIndex === targetIndex) return;
-            
+
             const sourceOrderIdx = columnOrder[sourceIndex];
             const targetOrderIdx = columnOrder[targetIndex];
-            
+
             if (sourceOrderIdx === 0 || targetOrderIdx === 0) {
                 alert('Главный список всегда должен быть первым');
                 return;
             }
-            
+
             if (moveColumn(sourceIndex, targetIndex)) {
                 renderWordAlignmentTable();
             }
         }
 
                 // ==================== КОНТЕКСТ ПРИ КЛИКЕ ====================
-        
+
         // Хранилище исходных текстов для контекста
         let manuscriptTexts = {};
-        
+
         // Сохраняем исходные тексты при парсинге
         const originalHandleFiles = handleFiles;
         handleFiles = async function(files) {
@@ -1697,23 +1654,23 @@
                 manuscriptTexts[ms.name] = ms.data.fullText;
             });
         };
-        
+
         // Функция получения контекста слова
         function getWordContext(fullText, word, contextSize = 5) {
             if (!fullText || !word) return null;
-            
+
             const words = fullText.split(/\s+/);
             const wordIndex = words.findIndex(w => w === word);
-            
+
             if (wordIndex === -1) {
                 // Ищем с нормализацией
                 const normalizedWord = normalizeText(word);
                 const normIndex = words.findIndex(w => normalizeText(w) === normalizedWord);
                 if (normIndex === -1) return null;
-                
+
                 const start = Math.max(0, normIndex - contextSize);
                 const end = Math.min(words.length, normIndex + contextSize + 1);
-                
+
                 return {
                     before: words.slice(start, normIndex),
                     word: words[normIndex],
@@ -1722,10 +1679,10 @@
                     total: words.length
                 };
             }
-            
+
             const start = Math.max(0, wordIndex - contextSize);
             const end = Math.min(words.length, wordIndex + contextSize + 1);
-            
+
             return {
                 before: words.slice(start, wordIndex),
                 word: words[wordIndex],
@@ -1734,7 +1691,7 @@
                 total: words.length
             };
         }
-        
+
         // Показ контекста
         function showContext(word, manuscriptName) {
             const fullText = manuscriptTexts[manuscriptName];
@@ -1742,38 +1699,38 @@
                 alert('Текст не найден для: ' + manuscriptName);
                 return;
             }
-            
+
             const context = getWordContext(fullText, word);
             if (!context) {
                 alert('Слово не найдено в тексте');
                 return;
             }
-            
+
             const modal = document.getElementById('contextModal');
             const title = document.getElementById('contextTitle');
             const text = document.getElementById('contextText');
             const source = document.getElementById('contextSource');
             const position = document.getElementById('contextPosition');
-            
+
             title.textContent = `Контекст слова «${word}»`;
-            
+
             // Формируем текст с подсветкой
             const beforeHtml = context.before.map(w => escapeHtml(w)).join(' ');
             const wordHtml = `<span class="context-word-highlight">${escapeHtml(context.word)}</span>`;
             const afterHtml = context.after.map(w => escapeHtml(w)).join(' ');
-            
+
             text.innerHTML = `${beforeHtml} ${wordHtml} ${afterHtml}`;
             source.textContent = `📄 ${manuscriptName}`;
             position.textContent = `Слово ${context.position} из ${context.total}`;
-            
+
             modal.classList.add('active');
         }
-        
+
         // Закрытие контекста
         window.closeContext = function() {
             document.getElementById('contextModal').classList.remove('active');
         };
-        
+
         // Закрытие по клику вне окна
         document.addEventListener('click', function(e) {
             const modal = document.getElementById('contextModal');
@@ -1781,7 +1738,7 @@
                 modal.classList.remove('active');
             }
         });
-        
+
         // Закрытие по Escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
@@ -1804,7 +1761,7 @@
             localStorage.setItem('corpusSession', JSON.stringify(session));
             alert('Сессия сохранена');
         };
-        
+
         window.loadSession = function() {
             const saved = localStorage.getItem('corpusSession');
             // Восстанавливаем тексты из загруженных файлов
@@ -1816,7 +1773,7 @@
                     }
                 });
             }
-            
+
             if (saved) {
                 const session = JSON.parse(saved);
                 folioStart.value = session.sheets.start;
@@ -1829,18 +1786,18 @@
                 alert('Нет сохранённой сессии');
             }
         };
-        
+
         // Экспорт XML (адаптирован для пословного режима)
         exportBtn.addEventListener('click', () => {
             updateAlignedDataFromTable();
-            
+
             if (!alignedData) return;
-            
+
             let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Пословное выравнивание</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
             xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
             alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
             xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n';
-            
+
             for (let i = 0; i < alignedData.mainWords.length; i++) {
                 xml += '      <div type="alignment" n="' + (i+1) + '">\n';
                 xml += '        <seg wit="#main">' + alignedData.mainWords[i] + '</seg>\n';
@@ -1850,9 +1807,9 @@
                 });
                 xml += '      </div>\n';
             }
-            
+
             xml += '    </body>\n  </text>\n</TEI>';
-            
+
             const blob = new Blob([xml], { type: 'application/xml' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
