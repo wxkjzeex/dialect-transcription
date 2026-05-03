@@ -1,23 +1,17 @@
 import os
 import tempfile
 import uuid
-import json
-import time
+import subprocess
+import speech_recognition as sr
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Tuple, Optional
-import sys
 
 app = Flask(__name__)
 CORS(app)
 
-# ==================== КОНФИГУРАЦИЯ ====================
-# Используем /tmp для Render (единственная writable директория)
-UPLOAD_FOLDER = '/tmp/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-SESSIONS = {}
+# ==================== СЕССИИ ====================
+sessions = {}
 
 # Максимальный размер запроса - 50MB
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
@@ -381,9 +375,7 @@ def health():
 
 @app.route('/upload_corpus', methods=['POST'])
 def upload_corpus():
-    """Загрузка и парсинг файлов"""
-    start_time = time.time()
-    
+    """Загрузка и парсинг XML-TEI файлов"""
     if 'files' not in request.files:
         return jsonify({'error': 'Нет файлов'}), 400
     
@@ -393,54 +385,210 @@ def upload_corpus():
         return jsonify({'error': 'Нет файлов'}), 400
     
     result = []
-    errors = []
     
     for file in files:
         if not file.filename or not file.filename.endswith('.xml'):
             continue
         
         try:
-            # Читаем содержимое
-            content = file.read().decode('utf-8', errors='replace')
-            
-            # Парсим
-            parsed = parse_tei_fast(content)
-            
-            if 'error' in parsed:
-                errors.append(f"{file.filename}: {parsed['error']}")
-                continue
-            
-            # Сохраняем во временный файл для сессии
-            temp_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex[:8]}_{file.filename}")
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            # Используем ваш существующий parse_tei
+            data = parse_tei(file)
             
             result.append({
                 'name': file.filename,
-                'words': parsed['words'],
-                'full_text': parsed['full_text'],
-                'word_count': parsed['word_count'],
-                'sheets': parsed.get('sheets', []),
-                'temp_path': temp_path
+                'words': data['words'],
+                'full_text': data['fullText'],
+                'word_count': len(data['words']),
+                'sheets': []  # Если нужно, добавьте парсинг листов
             })
             
         except Exception as e:
-            errors.append(f"{file.filename}: {str(e)}")
+            return jsonify({'error': f'Ошибка в {file.filename}: {str(e)}'}), 400
     
-    elapsed = time.time() - start_time
+    if not result:
+        return jsonify({'error': 'Нет подходящих файлов'}), 400
     
-    return jsonify({
-        'manuscripts': result,
-        'errors': errors if errors else None,
-        'parse_time': round(elapsed, 2)
-    })
+    return jsonify({'manuscripts': result})
+
+def normalize_word(word):
+    """Быстрая нормализация слова для сравнения"""
+    if not word or word == '—':
+        return ''
+    
+    w = word.lower()
+    # Удаляем пунктуацию
+    for ch in '·⸱※∽⁘:.,;!?':
+        w = w.replace(ch, '')
+    # Удаляем диакритику
+    for ch in '҃҄҅҆':
+        w = w.replace(ch, '')
+    w = w.rstrip('ъь')
+    
+    # Замены букв
+    replacements = {
+        'ѣ': 'е', 'і': 'и', 'ї': 'и', 'ѵ': 'и',
+        'ѡ': 'о', 'ꙩ': 'о', 'ѹ': 'у', 'ꙋ': 'у',
+        'ѧ': 'я', 'ꙗ': 'я', 'ѳ': 'ф', 'ѕ': 'з',
+        'ꙁ': 'з', 'ꙑ': 'ы'
+    }
+    for old, new in replacements.items():
+        w = w.replace(old, new)
+    
+    return w
+
+
+def word_similarity(w1, w2):
+    """Оценка сходства двух слов (0-10)"""
+    if w1 == w2:
+        return 10.0
+    
+    n1 = normalize_word(w1)
+    n2 = normalize_word(w2)
+    
+    if not n1 and not n2:
+        return 0.0
+    if n1 == n2:
+        return 8.0
+    
+    # Служебные слова
+    anchors = {'и', 'же', 'въ', 'не', 'на', 'къ', 'съ', 'от', 'за', 'яко'}
+    if n1 in anchors and n2 in anchors:
+        return 6.0
+    
+    # Сравнение по длине общей части
+    max_len = max(len(n1), len(n2))
+    if max_len == 0:
+        return 0.0
+    
+    matches = sum(1 for a, b in zip(n1, n2) if a == b)
+    ratio = matches / max_len
+    
+    if ratio > 0.8:
+        return 6.0
+    elif ratio > 0.6:
+        return 3.0
+    elif ratio > 0.4:
+        return 1.0
+    
+    return -2.0
+
+
+def needleman_wunsch(seq1, seq2, gap_penalty=-5.0):
+    """Упрощенный алгоритм Нидлмана-Вунша"""
+    n, m = len(seq1), len(seq2)
+    
+    # Ограничение размера
+    if n > 1000:
+        n = 1000
+        seq1 = seq1[:1000]
+    if m > 1000:
+        m = 1000
+        seq2 = seq2[:1000]
+    
+    dp = [[0.0] * (m + 1) for _ in range(n + 1)]
+    trace = [[''] * (m + 1) for _ in range(n + 1)]
+    
+    for i in range(1, n + 1):
+        dp[i][0] = i * gap_penalty
+        trace[i][0] = 'u'
+    
+    for j in range(1, m + 1):
+        dp[0][j] = j * gap_penalty
+        trace[0][j] = 'l'
+    
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            match_score = word_similarity(seq1[i-1], seq2[j-1])
+            scores = {
+                'd': dp[i-1][j-1] + match_score,
+                'u': dp[i-1][j] + gap_penalty,
+                'l': dp[i][j-1] + gap_penalty
+            }
+            best = max(scores, key=scores.get)
+            dp[i][j] = scores[best]
+            trace[i][j] = best
+    
+    aligned1, aligned2 = [], []
+    i, j = n, m
+    
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and trace[i][j] == 'd':
+            aligned1.append(seq1[i-1])
+            aligned2.append(seq2[j-1])
+            i -= 1
+            j -= 1
+        elif i > 0 and trace[i][j] == 'u':
+            aligned1.append(seq1[i-1])
+            aligned2.append('—')
+            i -= 1
+        else:
+            aligned1.append('—')
+            aligned2.append(seq2[j-1] if j > 0 else '—')
+            if j > 0:
+                j -= 1
+    
+    return list(reversed(aligned1)), list(reversed(aligned2))
+
+
+def detect_diff_type(main_word, other_word):
+    """Определение типа разночтения"""
+    if main_word == '—':
+        return 'insertion'
+    if other_word == '—':
+        return 'deletion'
+    if main_word == other_word:
+        return 'match'
+    
+    norm_main = normalize_word(main_word)
+    norm_other = normalize_word(other_word)
+    
+    if norm_main == norm_other:
+        return 'match'
+    
+    # Графические
+    graphic_pairs = [
+        ('ѹ', 'у'), ('ꙋ', 'у'), ('оу', 'у'),
+        ('ѣ', 'е'), ('ꙗ', 'я'), ('ѧ', 'я'),
+        ('і', 'и'), ('ї', 'и'), ('ѵ', 'и'),
+        ('ѡ', 'о'), ('ꙩ', 'о'), ('ѳ', 'ф'),
+        ('ѕ', 'з'), ('ꙁ', 'з')
+    ]
+    
+    test_main = norm_main
+    test_other = norm_other
+    for old, new in graphic_pairs:
+        test_main = test_main.replace(old, new)
+        test_other = test_other.replace(old, new)
+    
+    if test_main == test_other:
+        return 'graphic'
+    
+    # Морфологические
+    prefix_len = 0
+    for i in range(min(len(test_main), len(test_other))):
+        if test_main[i] == test_other[i]:
+            prefix_len += 1
+        else:
+            break
+    
+    if prefix_len >= 3:
+        suffix1 = test_main[prefix_len:]
+        suffix2 = test_other[prefix_len:]
+        if len(suffix1) <= 3 and len(suffix2) <= 3:
+            return 'morph'
+    
+    # Фонетические (упрощенно)
+    if len(norm_main) == len(norm_other) and len(norm_main) > 2:
+        diff_count = sum(1 for a, b in zip(norm_main, norm_other) if a != b)
+        if diff_count <= 2:
+            return 'phonetic'
+    
+    return 'lexical'
 
 
 @app.route('/align', methods=['POST'])
 def align_manuscripts():
-    """Быстрое выравнивание"""
-    start_time = time.time()
-    
+    """Выравнивание рукописей"""
     data = request.json
     
     if not data or 'manuscripts' not in data:
@@ -448,122 +596,104 @@ def align_manuscripts():
     
     manuscripts = data['manuscripts']
     main_index = int(data.get('main_index', 0))
-    folio_start = data.get('folio_start')
-    folio_end = data.get('folio_end')
     
     if main_index >= len(manuscripts):
         return jsonify({'error': 'Неверный индекс главного списка'}), 400
     
     # Главный список
     main_ms = manuscripts[main_index]
-    
-    if folio_start and folio_end:
-        main_words = filter_by_sheets(
-            {'words': main_ms['words'], 'sheets': main_ms.get('sheets', [])},
-            int(folio_start),
-            int(folio_end)
-        )
-    else:
-        main_words = main_ms['words']
+    main_words = main_ms['words']
     
     if not main_words:
         return jsonify({'error': 'Не найдены слова в главном списке'}), 400
     
     # Ограничение размера
-    if len(main_words) > 1000:
-        main_words = main_words[:1000]
+    if len(main_words) > 500:
+        main_words = main_words[:500]
     
     # Остальные списки
-    other_words_list = []
     other_names = []
+    all_aligned = []
     
     for i, ms in enumerate(manuscripts):
-        if i != main_index:
-            words = ms['words']
-            if len(words) > 2000:
-                words = words[:2000]
-            other_words_list.append(words)
-            other_names.append(ms['name'])
+        if i == main_index:
+            continue
+        
+        other_words = ms['words'][:500]  # Ограничение
+        
+        # Попарное выравнивание с главным
+        aligned_main, aligned_other = needleman_wunsch(main_words, other_words)
+        all_aligned.append(aligned_other)
+        other_names.append(ms['name'])
     
-    if not other_words_list:
+    if not all_aligned:
         return jsonify({'error': 'Нет списков для сравнения'}), 400
     
-    # Выравнивание
-    aligned = multiple_alignment(main_words, other_words_list)
+    # Определяем позиции вставок в главном
+    insertion_positions = set()
+    for al_other in all_aligned:
+        # Используем первое выравнивание как эталон для позиций
+        pass
     
-    # Типы разночтений
-    diff_types = []
-    stats = {'total': 0, 'matches': 0, 'graphic': 0, 'phonetic': 0,
-             'morph': 0, 'lexical': 0, 'insertion': 0, 'deletion': 0}
+    # Строим общее выравнивание (упрощенно)
+    alignment_table = []
+    diff_types_table = []
     
-    for i, main_word in enumerate(aligned['main_words']):
-        row_types = []
-        for j, other_row in enumerate(aligned['alignments']):
-            if i < len(other_row):
-                other_word = other_row[i]
-                dt = detect_diff_type(main_word, other_word)
-                row_types.append(dt)
-                
-                stats['total'] += 1
-                if dt in stats:
-                    stats[dt] += 1
-            else:
-                row_types.append('unknown')
-        diff_types.append(row_types)
+    max_len = max(len(al) for al in all_aligned)
+    max_len = max(max_len, len(main_words))
     
-    # Проценты
+    for i in range(max_len):
+        main_word = main_words[i] if i < len(main_words) else '—'
+        row = [main_word]
+        types_row = []
+        
+        for al_other in all_aligned:
+            other_word = al_other[i] if i < len(al_other) else '—'
+            row.append(other_word)
+            types_row.append(detect_diff_type(main_word, other_word))
+        
+        alignment_table.append(row)
+        diff_types_table.append(types_row)
+    
+    # Статистика
+    stats = {
+        'total': 0,
+        'match': 0,
+        'graphic': 0,
+        'phonetic': 0,
+        'morph': 0,
+        'lexical': 0,
+        'insertion': 0,
+        'deletion': 0
+    }
+    
+    for types_row in diff_types_table:
+        for dt in types_row:
+            stats['total'] += 1
+            if dt in stats:
+                stats[dt] += 1
+    
     if stats['total'] > 0:
-        stats['match_percent'] = round(stats['matches'] / stats['total'] * 100, 1)
+        stats['match_percent'] = round(stats['match'] / stats['total'] * 100, 1)
     else:
         stats['match_percent'] = 0
     
-    # Имена
-    all_names = [main_ms['name']] + other_names
-    
-    # Формируем таблицу
-    alignment_table = []
-    for i, main_word in enumerate(aligned['main_words']):
-        row = [main_word]
-        for other_row in aligned['alignments']:
-            row.append(other_row[i] if i < len(other_row) else '—')
-        alignment_table.append(row)
-    
     # Сохраняем сессию
-    session_id = uuid.uuid4().hex[:8]
-    SESSIONS[session_id] = {
+    session_id = str(uuid.uuid4())[:8]
+    sessions[session_id] = {
         'alignment': alignment_table,
-        'manuscript_names': all_names,
-        'diff_types': diff_types,
-        'statistics': stats,
-        'main_words': aligned['main_words'],
-        'alignments': aligned['alignments'],
-        'created_at': time.time()
+        'manuscript_names': [main_ms['name']] + other_names,
+        'diff_types': diff_types_table,
+        'statistics': stats
     }
-    
-    # Очищаем старые сессии
-    cleanup_old_sessions()
-    
-    elapsed = time.time() - start_time
     
     return jsonify({
         'session_id': session_id,
         'alignment': alignment_table,
-        'manuscript_names': all_names,
-        'diff_types': diff_types,
-        'statistics': stats,
-        'align_time': round(elapsed, 2)
+        'manuscript_names': [main_ms['name']] + other_names,
+        'diff_types': diff_types_table,
+        'statistics': stats
     })
-
-
-def cleanup_old_sessions():
-    """Удаление сессий старше 1 часа"""
-    now = time.time()
-    to_delete = []
-    for sid, data in SESSIONS.items():
-        if now - data.get('created_at', 0) > 3600:
-            to_delete.append(sid)
-    for sid in to_delete:
-        del SESSIONS[sid]
 
 
 @app.route('/export_tei', methods=['POST'])
@@ -572,8 +702,8 @@ def export_tei():
     data = request.json or {}
     session_id = data.get('session_id')
     
-    if session_id and session_id in SESSIONS:
-        alignment_data = SESSIONS[session_id]
+    if session_id and session_id in sessions:
+        alignment_data = sessions[session_id]
     elif data.get('data'):
         alignment_data = data['data']
     else:
@@ -582,54 +712,45 @@ def export_tei():
     names = alignment_data.get('manuscript_names', ['Главный'])
     alignment = alignment_data.get('alignment', [])
     
-    # Генерируем XML
-    xml_parts = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<TEI xmlns="http://www.tei-c.org/ns/1.0">',
-        '<teiHeader>',
-        '<fileDesc>',
-        '<titleStmt>',
-        '<title>Параллельный корпус: Притча о блудном сыне</title>',
-        '</titleStmt>',
-        '<sourceDesc>',
-        '<listWit>'
-    ]
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<TEI xmlns="http://www.tei-c.org/ns/1.0">\n'
+    xml += '  <teiHeader>\n'
+    xml += '    <fileDesc>\n'
+    xml += '      <titleStmt>\n'
+    xml += '        <title>Параллельный корпус: Притча о блудном сыне</title>\n'
+    xml += '      </titleStmt>\n'
+    xml += '      <sourceDesc>\n'
+    xml += '        <listWit>\n'
     
     for i, name in enumerate(names):
         wid = 'main' if i == 0 else f'wit{i}'
-        xml_parts.append(f'<witness xml:id="{wid}">{name}</witness>')
+        xml += f'          <witness xml:id="{wid}">{name}</witness>\n'
     
-    xml_parts.extend([
-        '</listWit>',
-        '</sourceDesc>',
-        '</fileDesc>',
-        '</teiHeader>',
-        '<text>',
-        '<body>',
-        '<div type="alignment">'
-    ])
+    xml += '        </listWit>\n'
+    xml += '      </sourceDesc>\n'
+    xml += '    </fileDesc>\n'
+    xml += '  </teiHeader>\n'
+    xml += '  <text>\n'
+    xml += '    <body>\n'
+    xml += '      <div type="alignment">\n'
     
     for i, row in enumerate(alignment):
-        xml_parts.append(f'<app n="{i+1}">')
-        xml_parts.append(f'<rdg wit="#main">{escape_xml(row[0])}</rdg>')
+        xml += f'        <app n="{i+1}">\n'
+        xml += f'          <rdg wit="#main">{row[0] if row[0] else "—"}</rdg>\n'
         for j in range(1, len(row)):
             wid = f'wit{j}'
-            xml_parts.append(f'<rdg wit="#{wid}">{escape_xml(row[j])}</rdg>')
-        xml_parts.append('</app>')
+            xml += f'          <rdg wit="#{wid}">{row[j] if row[j] else "—"}</rdg>\n'
+        xml += '        </app>\n'
     
-    xml_parts.extend([
-        '</div>',
-        '</body>',
-        '</text>',
-        '</TEI>'
-    ])
+    xml += '      </div>\n'
+    xml += '    </body>\n'
+    xml += '  </text>\n'
+    xml += '</TEI>'
     
-    xml_content = '\n'.join(xml_parts)
-    
-    # Сохраняем и отправляем
+    # Сохраняем во временный файл
     temp_file = os.path.join('/tmp', f'export_{uuid.uuid4().hex[:8]}.xml')
     with open(temp_file, 'w', encoding='utf-8') as f:
-        f.write(xml_content)
+        f.write(xml)
     
     return send_file(
         temp_file,
@@ -638,12 +759,6 @@ def export_tei():
         download_name='aligned_corpus.xml'
     )
 
-
-def escape_xml(text):
-    """Экранирование XML"""
-    if not text:
-        return ''
-    return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
 
 # ==================== ЗАПУСК ====================
