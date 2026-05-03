@@ -262,42 +262,77 @@
         });
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
         
-        // Загрузка файлов на сервер
+        // Загрузка файлов на сервер с таймаутом
         async function handleFiles(files) {
+            // Очищаем предыдущие
             for (let file of files) {
                 if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
                     uploadedFiles.push(file);
                 }
             }
             
-            if (uploadedFiles.length > 0) {
-                progressDiv.style.display = 'block';
-                progressDiv.innerHTML = '⏳ Загрузка файлов на сервер...';
+            if (uploadedFiles.length === 0) return;
+            
+            progressDiv.style.display = 'block';
+            progressDiv.className = 'progress';
+            progressDiv.innerHTML = '⏳ Загрузка файлов на сервер...';
+            
+            const formData = new FormData();
+            let totalSize = 0;
+            
+            uploadedFiles.forEach(file => {
+                formData.append('files', file);
+                totalSize += file.size;
+            });
+            
+            // Проверка размера
+            if (totalSize > 10 * 1024 * 1024) {
+                progressDiv.innerHTML = '❌ Суммарный размер файлов превышает 10MB. Загрузите меньше файлов.';
+                return;
+            }
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 секунд таймаут
                 
-                const formData = new FormData();
-                uploadedFiles.forEach(file => {
-                    formData.append('files', file);
+                progressDiv.innerHTML = `⏳ Отправка ${uploadedFiles.length} файлов (${(totalSize/1024).toFixed(0)}KB)...`;
+                
+                const response = await fetch('/upload_corpus', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
                 });
                 
-                try {
-                    const response = await fetch('/upload_corpus', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Ошибка загрузки');
-                    }
-                    
-                    const result = await response.json();
-                    manuscripts = result.manuscripts;
-                    
-                    progressDiv.innerHTML = '✅ Файлы загружены и распарсены!';
-                    setTimeout(() => { progressDiv.style.display = 'none'; }, 1500);
-                } catch (err) {
-                    progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
-                    console.error(err);
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Ошибка сервера: ${response.status} - ${errorText.substring(0, 200)}`);
                 }
+                
+                const result = await response.json();
+                
+                if (result.errors && result.errors.length > 0) {
+                    console.warn('Предупреждения парсинга:', result.errors);
+                }
+                
+                manuscripts = result.manuscripts || [];
+                
+                if (manuscripts.length === 0) {
+                    progressDiv.innerHTML = '❌ Не удалось распарсить файлы. Проверьте формат XML.';
+                    return;
+                }
+                
+                progressDiv.innerHTML = `✅ Загружено ${manuscripts.length} списков за ${result.parse_time || '?'}с`;
+                setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
+                
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    progressDiv.innerHTML = '❌ Превышено время ожидания (60с). Попробуйте файлы меньшего размера.';
+                } else {
+                    progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
+                }
+                console.error(err);
             }
             
             renderFileList();
@@ -310,12 +345,10 @@
                 return;
             }
             let html = '<h3 style="margin-bottom: 12px; color: #3e3225;">Загруженные списки:</h3>';
-            uploadedFiles.forEach((file, index) => {
-                const ms = manuscripts[index];
-                const wordCount = ms ? ms.word_count : '...';
+            manuscripts.forEach((ms, index) => {
                 html += `
                     <div class="file-item">
-                        <span>📄 ${file.name} <span style="color: #8b7355;">(${wordCount} слов)</span></span>
+                        <span>📄 ${ms.name} <span style="color: #8b7355;">(${ms.word_count || '?'} слов)</span></span>
                         <span class="file-remove" onclick="removeFile(${index})">✕</span>
                     </div>
                 `;
@@ -324,7 +357,7 @@
             
             let options = '<option value="">Выберите главный список</option>';
             manuscripts.forEach((ms, index) => {
-                options += `<option value="${index}">${ms.name}</option>`;
+                options += `<option value="${index}">${ms.name} (${ms.word_count || '?'} слов)</option>`;
             });
             mainMsSelect.innerHTML = options;
         }
@@ -352,26 +385,30 @@
                 return;
             }
             
-            const startSheet = document.getElementById('folioStart').value;
-            const endSheet = document.getElementById('folioEnd').value;
-            
             progressDiv.style.display = 'block';
-            progressDiv.innerHTML = '⏳ Выполняется выравнивание...';
+            progressDiv.innerHTML = '⏳ Выполняется выравнивание... (может занять до 30 секунд)';
             
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
+                
                 const response = await fetch('/align', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         manuscripts: manuscripts,
                         main_index: mainIndex,
-                        folio_start: startSheet,
-                        folio_end: endSheet
-                    })
+                        folio_start: document.getElementById('folioStart').value,
+                        folio_end: document.getElementById('folioEnd').value
+                    }),
+                    signal: controller.signal
                 });
                 
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
-                    throw new Error('Ошибка выравнивания');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Ошибка сервера: ${response.status}`);
                 }
                 
                 const result = await response.json();
@@ -381,137 +418,134 @@
                 progressDiv.style.display = 'none';
                 renderAlignment(result);
                 exportBtn.disabled = false;
+                
             } catch (err) {
-                progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
+                if (err.name === 'AbortError') {
+                    progressDiv.innerHTML = '❌ Превышено время ожидания. Попробуйте ограничить диапазон листов.';
+                } else {
+                    progressDiv.innerHTML = '❌ Ошибка выравнивания: ' + err.message;
+                }
                 console.error(err);
             }
         });
         
-        // Отрисовка результатов
         function renderAlignment(data) {
             const container = document.getElementById('alignmentResult');
             
-            // Статистика разночтений
-            let statsHtml = '<div class="stats"><h3>📊 Статистика разночтений</h3>';
-            if (data.statistics) {
-                const stats = data.statistics;
-                statsHtml += `
-                    <div class="stat-item">📝 Всего позиций: <strong>${stats.total}</strong></div>
-                    <div class="stat-item">✅ Совпадений: <strong>${stats.matches}</strong> (${stats.match_percent}%)</div>
-                    <div class="stat-item">✏️ Графические: <strong>${stats.graphic}</strong></div>
-                    <div class="stat-item">🗣️ Фонетические: <strong>${stats.phonetic}</strong></div>
-                    <div class="stat-item">📐 Морфологические: <strong>${stats.morph}</strong></div>
-                    <div class="stat-item">📚 Лексические: <strong>${stats.lexical}</strong></div>
-                    <div class="stat-item">➕ Вставки: <strong>${stats.insertion}</strong></div>
-                `;
+            if (!data.alignment || data.alignment.length === 0) {
+                container.innerHTML = '<p style="color: red;">Нет данных для отображения</p>';
+                return;
             }
-            statsHtml += '</div>';
+            
+            let html = '';
+            
+            // Статистика
+            if (data.statistics) {
+                const s = data.statistics;
+                html += `
+                <div class="stats">
+                    <h3>📊 Статистика разночтений (время выравнивания: ${data.align_time || '?'}с)</h3>
+                    <div class="stat-item">📝 Всего позиций: <strong>${s.total || 0}</strong></div>
+                    <div class="stat-item">✅ Совпадений: <strong>${s.matches || 0}</strong> (${s.match_percent || 0}%)</div>
+                    <div class="stat-item">✏️ Графические: <strong>${s.graphic || 0}</strong></div>
+                    <div class="stat-item">🗣️ Фонетические: <strong>${s.phonetic || 0}</strong></div>
+                    <div class="stat-item">📐 Морфологические: <strong>${s.morph || 0}</strong></div>
+                    <div class="stat-item">📚 Лексические: <strong>${s.lexical || 0}</strong></div>
+                    <div class="stat-item">➕ Вставки: <strong>${s.insertion || 0}</strong></div>
+                    <div class="stat-item">➖ Удаления: <strong>${s.deletion || 0}</strong></div>
+                </div>`;
+            }
             
             // Легенда
-            statsHtml += `
-                <div class="legend">
-                    <div class="legend-item"><div class="legend-color" style="background: #fde2e4; border-color: #c0392b;"></div> Графические</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #fff3cd; border-color: #d4a017;"></div> Фонетические</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #d4edda; border-color: #27ae60;"></div> Морфологические</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #e2d5f1; border-color: #8e44ad;"></div> Лексические</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #ffe5e0; border-color: #e74c3c;"></div> Вставки</div>
-                </div>
-            `;
+            html += `
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="background: #fde2e4; border-color: #c0392b;"></div> Графические</div>
+                <div class="legend-item"><div class="legend-color" style="background: #fff3cd; border-color: #d4a017;"></div> Фонетические</div>
+                <div class="legend-item"><div class="legend-color" style="background: #d4edda; border-color: #27ae60;"></div> Морфологические</div>
+                <div class="legend-item"><div class="legend-color" style="background: #e2d5f1; border-color: #8e44ad;"></div> Лексические</div>
+                <div class="legend-item"><div class="legend-color" style="background: #ffe5e0; border-color: #e74c3c;"></div> Вставки</div>
+            </div>`;
             
-            // Матрица сходства
-            if (data.similarity_matrix) {
-                statsHtml += '<div class="similarity-matrix"><h4>📈 Матрица сходства списков</h4><table>';
-                statsHtml += '<tr><th>Список</th>';
-                data.similarity_matrix.labels.forEach(label => {
-                    statsHtml += `<th>${label}</th>`;
-                });
-                statsHtml += '</tr>';
-                
-                data.similarity_matrix.matrix.forEach((row, i) => {
-                    statsHtml += `<tr><td><strong>${data.similarity_matrix.labels[i]}</strong></td>`;
-                    row.forEach((val, j) => {
-                        let cls = '';
-                        if (i === j) cls = 'high-sim';
-                        else if (val >= 70) cls = 'high-sim';
-                        else if (val >= 50) cls = 'med-sim';
-                        else cls = 'low-sim';
-                        statsHtml += `<td class="${cls}">${val}%</td>`;
-                    });
-                    statsHtml += '</tr>';
-                });
-                statsHtml += '</table></div>';
-            }
+            // Таблица
+            html += '<h3>📖 Пословное выравнивание (показаны первые 100 строк)</h3>';
+            html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
+            html += '<table class="alignment-table"><thead><tr><th>№</th>';
             
-            // Таблица выравнивания
-            let tableHtml = '<h3>📖 Пословное выравнивание</h3>';
-            tableHtml += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
-            tableHtml += '<table class="alignment-table">';
-            
-            // Заголовки
-            tableHtml += '<thead><tr><th>№</th>';
-            data.manuscript_names.forEach(name => {
-                tableHtml += `<th>${name}</th>`;
+            data.manuscript_names.forEach((name, i) => {
+                html += `<th>${name}${i === 0 ? ' (главный)' : ''}</th>`;
             });
-            tableHtml += '<th>Тип</th></tr></thead><tbody>';
             
-            // Строки
-            data.alignment.forEach((row, index) => {
-                tableHtml += '<tr>';
-                tableHtml += `<td><strong>${index + 1}</strong></td>`;
+            html += '<th>Тип</th></tr></thead><tbody>';
+            
+            // Ограничиваем отображение
+            const maxRows = Math.min(data.alignment.length, 100);
+            
+            for (let i = 0; i < maxRows; i++) {
+                const row = data.alignment[i];
+                html += '<tr>';
+                html += `<td><strong>${i + 1}</strong></td>`;
                 
-                let hasDiff = false;
                 const mainWord = row[0];
                 
-                row.forEach((word, colIdx) => {
-                    tableHtml += `<td>${word || '—'}</td>`;
-                    if (colIdx > 0 && data.diff_types) {
-                        const diffType = data.diff_types[index]?.[colIdx - 1];
-                        if (diffType && diffType !== 'match') hasDiff = true;
+                for (let j = 0; j < row.length; j++) {
+                    const word = row[j];
+                    let cellClass = '';
+                    
+                    if (j > 0 && data.diff_types && data.diff_types[i]) {
+                        const dt = data.diff_types[i][j - 1];
+                        if (dt === 'graphic') cellClass = 'diff-graphic';
+                        else if (dt === 'phonetic') cellClass = 'diff-phonetic';
+                        else if (dt === 'morph') cellClass = 'diff-morph';
+                        else if (dt === 'lexical') cellClass = 'diff-lexical';
+                        else if (dt === 'insertion') cellClass = 'diff-insertion';
+                        else if (dt === 'deletion') cellClass = 'diff-deletion';
                     }
-                });
+                    
+                    html += `<td class="${cellClass}">${word || '—'}</td>`;
+                }
                 
-                // Тип разночтения
-                tableHtml += '<td>';
-                if (data.diff_types) {
-                    const types = data.diff_types[index] || [];
-                    const uniqueTypes = [...new Set(types.filter(t => t !== 'match'))];
-                    if (uniqueTypes.length > 0) {
-                        uniqueTypes.forEach(type => {
+                // Типы
+                html += '<td>';
+                if (data.diff_types && data.diff_types[i]) {
+                    const types = [...new Set(data.diff_types[i].filter(t => t !== 'match'))];
+                    if (types.length > 0) {
+                        types.forEach(type => {
                             const labels = {
                                 'graphic': 'ГР', 'phonetic': 'ФН', 'morph': 'МФ',
                                 'lexical': 'ЛК', 'insertion': 'ВСТ', 'deletion': 'УД'
                             };
-                            tableHtml += `<span style="background: ${getColorForType(type)}; color: white; padding: 2px 6px; border-radius: 4px; margin: 2px; font-size: 11px;">${labels[type] || type}</span>`;
+                            const colors = {
+                                'graphic': '#c0392b', 'phonetic': '#d4a017', 'morph': '#27ae60',
+                                'lexical': '#8e44ad', 'insertion': '#e74c3c', 'deletion': '#636e72'
+                            };
+                            html += `<span style="background:${colors[type]};color:white;padding:2px 6px;border-radius:4px;margin:2px;font-size:11px;">${labels[type]}</span>`;
                         });
                     } else {
-                        tableHtml += '✓';
+                        html += '✓';
                     }
                 }
-                tableHtml += '</td></tr>';
-            });
+                html += '</td></tr>';
+            }
             
-            tableHtml += '</tbody></table></div>';
+            if (data.alignment.length > 100) {
+                html += `<tr><td colspan="${data.manuscript_names.length + 2}" style="text-align:center;color:#8b7355;">
+                    Показаны первые 100 из ${data.alignment.length} строк
+                </td></tr>`;
+            }
             
-            container.innerHTML = statsHtml + tableHtml;
+            html += '</tbody></table></div>';
+            
+            container.innerHTML = html;
         }
         
-        function getColorForType(type) {
-            const colors = {
-                'graphic': '#c0392b',
-                'phonetic': '#d4a017',
-                'morph': '#27ae60',
-                'lexical': '#8e44ad',
-                'insertion': '#e74c3c',
-                'deletion': '#636e72'
-            };
-            return colors[type] || '#95a5a6';
-        }
-        
-        // Экспорт в TEI XML
+        // Экспорт
         exportBtn.addEventListener('click', async () => {
             if (!alignedData) return;
             
             try {
+                progressDiv.style.display = 'block';
+                progressDiv.innerHTML = '⏳ Генерация XML...';
+                
                 const response = await fetch('/export_tei', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -521,9 +555,7 @@
                     })
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Ошибка экспорта');
-                }
+                if (!response.ok) throw new Error('Ошибка экспорта');
                 
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
@@ -534,8 +566,11 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
+                
+                progressDiv.style.display = 'none';
+                
             } catch (err) {
-                alert('Ошибка экспорта: ' + err.message);
+                progressDiv.innerHTML = '❌ Ошибка: ' + err.message;
             }
         });
     </script>
