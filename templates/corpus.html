@@ -696,16 +696,91 @@
         }
         
         function alignMultiple(mainWords, otherWordsArray) {
-            const alignments = [];
+            // Выравниваем каждый список попарно с главным
+            const pairwiseAlignments = [];
             
             for (let ow of otherWordsArray) {
                 const [alignedMain, alignedOther] = needlemanWunsch(mainWords, ow);
-                alignments.push(alignedOther.map(w => ({ other: w })));
+                pairwiseAlignments.push({
+                    main: alignedMain,
+                    other: alignedOther
+                });
             }
             
+            // Находим все позиции, где в главном тексте должны быть пропуски
+            const gapPositions = new Set();
+            for (let al of pairwiseAlignments) {
+                for (let pos = 0; pos < al.main.length; pos++) {
+                    if (al.main[pos] === '—') {
+                        gapPositions.add(pos);
+                    }
+                }
+            }
+            
+            // Сортируем позиции пропусков
+            const sortedGaps = Array.from(gapPositions).sort((a, b) => a - b);
+            
+            // Расширяем главный список, вставляя пропуски
+            const expandedMain = [];
+            let mainIdx = 0;
+            let gapIdx = 0;
+            
+            // Определяем максимальную длину выравнивания
+            const maxAlignedLen = Math.max(
+                mainWords.length + sortedGaps.length,
+                ...pairwiseAlignments.map(a => a.main.length)
+            );
+            
+            for (let pos = 0; pos < maxAlignedLen; pos++) {
+                if (gapIdx < sortedGaps.length && sortedGaps[gapIdx] === pos) {
+                    expandedMain.push('—');
+                    gapIdx++;
+                } else if (mainIdx < mainWords.length) {
+                    expandedMain.push(mainWords[mainIdx]);
+                    mainIdx++;
+                } else {
+                    expandedMain.push('—');
+                }
+            }
+            
+            // Выравниваем остальные списки по расширенному главному
+            const resultAlignments = pairwiseAlignments.map(al => {
+                const result = [];
+                let otherIdx = 0;
+                
+                for (let pos = 0; pos < expandedMain.length; pos++) {
+                    if (expandedMain[pos] === '—') {
+                        // В главном пропуск — в другом может быть слово
+                        if (otherIdx < al.other.length) {
+                            const word = al.other[otherIdx];
+                            // Проверяем, соответствует ли это пропуску в главном
+                            if (pos < al.main.length && al.main[pos] === '—') {
+                                result.push(word);
+                                otherIdx++;
+                            } else {
+                                // Нет соответствия — тоже пропуск
+                                result.push('—');
+                            }
+                        } else {
+                            result.push('—');
+                        }
+                    } else {
+                        // В главном слово
+                        if (otherIdx < al.other.length) {
+                            result.push(al.other[otherIdx]);
+                            otherIdx++;
+                        } else {
+                            result.push('—');
+                        }
+                    }
+                }
+                
+                return result;
+            });
+            
             return {
-                mainWords: mainWords,
-                alignments: alignments
+                mainWords: expandedMain,
+                alignments: resultAlignments.map(arr => arr.map(w => ({ other: w })))
             };
         }
         
@@ -786,32 +861,25 @@
         
         alignBtn.addEventListener('click', () => {
             if (uploadedFiles.length < 2) return;
-            
             const mainIndex = parseInt(mainMsSelect.value);
-            if (isNaN(mainIndex)) {
-                alert('Выберите главный список');
-                return;
-            }
-            
-            const startSheet = folioStart.value;
-            const endSheet = folioEnd.value;
+            if (isNaN(mainIndex)) { alert('Выберите главный список'); return; }
             
             progressDiv.style.display = 'block';
             progressDiv.innerHTML = '⏳ Подготовка текста...';
             
             const mainMs = manuscripts[mainIndex];
-            const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
-            const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
+            
+            // Берем ПОЛНЫЙ текст главного списка (без фильтрации по листам)
+            const mainWords = mainMs.data.words; // <-- ИЗМЕНЕНО: берем words напрямую
             
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
             
             progressDiv.innerHTML = '⏳ Множественное выравнивание...';
             
-            const otherWordsArray = otherMss.map(ms => {
-                const text = ms.data.fullText;
-                return text.split(/\s+/).filter(w => w.length > 0);
-            });
+            // Собираем слова из остальных списков
+            const otherWordsArray = otherMss.map(ms => ms.data.words); // <-- ИЗМЕНЕНО
             
+            // Множественное выравнивание
             const result = alignMultiple(mainWords, otherWordsArray);
             
             alignedData = {
@@ -824,6 +892,10 @@
             progressDiv.style.display = 'none';
             renderWordAlignmentTable();
             exportBtn.disabled = false;
+            
+            console.log('Главных слов:', mainWords.length);
+            console.log('Слов в других списках:', otherWordsArray.map(a => a.length));
+            console.log('Первые 10 слов главного:', mainWords.slice(0, 10));
         });
         
         // ============================================================
