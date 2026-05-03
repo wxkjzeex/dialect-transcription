@@ -5,12 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Параллельный корпус · Притча о блудном сыне</title>
     <style>
+        /* ==================== ПОДКЛЮЧЕНИЕ ШРИФТОВ ==================== */
+        
+        /* Google Fonts - надёжные шрифты с поддержкой кириллицы */
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600&display=swap');
         
+        /* Локальный fallback для церковнославянских символов через системные шрифты */
+        /* Windows и Mac имеют встроенные шрифты с поддержкой исторической кириллицы */
+        
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Noto Serif', 'Times New Roman', serif;
+            font-family: 
+                'Noto Serif',           /* Основной с засечками */
+                'Noto Sans',            /* Без засечек */
+                'Times New Roman',      /* Windows fallback */
+                'Times',                /* Mac fallback */
+                'Arial Unicode MS',     /* Windows - широкий охват Unicode */
+                'Lucida Grande',        /* Mac - широкий охват Unicode */
+                'Segoe UI',             /* Windows UI */
+                'DejaVu Sans',          /* Linux */
+                serif;
             background: #f5efe6;
             min-height: 100vh;
             padding: 24px;
@@ -32,51 +47,354 @@
         }
         .header h1 { font-size: 28px; font-weight: 400; letter-spacing: 2px; }
         .header p { opacity: 0.8; font-size: 14px; margin-top: 8px; }
-        .tabs { display: flex; background: #e8ddd0; padding: 0 24px; gap: 4px; }
+        .tabs {
+            display: flex;
+            background: #e8ddd0;
+            padding: 0 24px;
+            gap: 4px;
+        }
         .tab {
-            padding: 14px 24px; font-size: 14px; font-weight: 600;
-            color: #6b5a4a; cursor: pointer; border-radius: 12px 12px 0 0;
-            transition: all 0.2s; text-decoration: none;
+            padding: 14px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b5a4a;
+            cursor: pointer;
+            border-radius: 12px 12px 0 0;
+            transition: all 0.2s;
         }
         .tab:hover { background: #d9cbbc; }
         .tab.active { background: #fffbf5; color: #4a3d2c; }
         .content { padding: 32px; }
         .upload-area {
-            border: 2px dashed #c9af91; border-radius: 16px; padding: 32px;
-            text-align: center; margin-bottom: 24px; cursor: pointer; transition: all 0.2s;
+            border: 2px dashed #c9af91;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            margin-bottom: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
         .upload-area:hover { border-color: #8b7355; background: #faf5ef; }
         .btn {
-            padding: 12px 24px; background: #4a3d2c; color: white; border: none;
-            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-            transition: all 0.2s; margin: 4px;
+            padding: 12px 24px;
+            background: #4a3d2c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .btn:hover { background: #5d4e37; }
+        .btn:hover { background: #5d4e37; transform: translateY(-2px); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-secondary { background: #8b7355; }
         .file-list { margin-top: 16px; }
         .file-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 16px; background: #f0eae2; border-radius: 8px; margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: #f0eae2;
+            border-radius: 8px;
+            margin-bottom: 8px;
         }
         .file-remove { color: #a05040; cursor: pointer; font-weight: bold; }
-        .controls { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; align-items: center; }
-        .alignment-table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 14px; }
-        .alignment-table th {
-            text-align: left; padding: 12px; background: #e8ddd0; color: #3e3225;
-            font-weight: 600; border: 1px solid #d4c5b0; position: sticky; top: 0; z-index: 10;
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin: 20px 0;
+            flex-wrap: wrap;
         }
-        .alignment-table td { padding: 12px; border: 1px solid #d4c5b0; vertical-align: top; }
+        .alignment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 24px;
+            font-size: 14px;
+        }
+        .alignment-table th {
+            text-align: left;
+            padding: 12px;
+            background: #e8ddd0;
+            color: #3e3225;
+            font-weight: 600;
+            border: 1px solid #d4c5b0;
+        }
+        .alignment-table td {
+            padding: 12px;
+            border: 1px solid #d4c5b0;
+            vertical-align: top;
+            font-family: 'Noto Serif', 'Times New Roman', 'Arial Unicode MS', serif;
+        }
         .alignment-table tr:hover td { background: #faf5ef; }
-        .diff-graphic { background: #fde2e4 !important; }
-        .diff-phonetic { background: #fff3cd !important; }
-        .diff-morph { background: #d4edda !important; }
-        .diff-lexical { background: #e2d5f1 !important; }
-        .diff-insertion { background: #ffe5e0 !important; }
-        .diff-deletion { background: #e0e0e0 !important; }
-        .stats { margin: 20px 0; padding: 16px; background: #f8f2ea; border-radius: 12px; border: 1px solid #d4c5b0; }
-        .stat-item { display: inline-flex; align-items: center; gap: 8px; margin: 8px 16px 8px 0; font-size: 14px; }
-        .progress { margin: 20px 0; padding: 12px; background: #e8ddd0; border-radius: 8px; text-align: center; }
+        .verse-text {
+            font-size: 15px;
+            color: #2c241a;
+            cursor: text;
+            transition: background 0.2s;
+        }
+        .verse-text:hover {
+            background: #f0eae2;
+        }
+        .verse-text.editing {
+            padding: 0;
+        }
+        .verse-text textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 8px;
+            font-family: 'Noto Serif', 'Times New Roman', 'Arial Unicode MS', serif;
+            font-size: 14px;
+            border: 2px solid #b89a7a;
+            border-radius: 6px;
+            background: #fffbf5;
+            resize: vertical;
+        }
+        .progress {
+            margin: 20px 0;
+            padding: 12px;
+            background: #e8ddd0;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        /* Панель выбора колонок */
+        .column-toggles {
+            background: #f8f2ea;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            border: 1px solid #d4c5b0;
+        }
+        .column-toggles-title {
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 12px;
+        }
+        .column-toggles-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .column-toggle-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 12px;
+            background: #fffbf5;
+            border-radius: 20px;
+            border: 1px solid #d4c5b0;
+            transition: all 0.2s;
+        }
+        .column-toggle-item:hover {
+            background: #e8ddd0;
+        }
+        .column-toggle-item input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+        .column-toggle-item label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #4a3d2c;
+        }
+        .column-toggle-item.disabled {
+            opacity: 0.5;
+            background: #e0d3c4;
+        }
+        .hidden-column {
+            display: none !important;
+        }
+        .alignment-table .hidden-column {
+            display: none;
+        }
+        
+        /* Drag & Drop для колонок */
+        .alignment-table th.draggable {
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            padding-right: 28px !important;
+        }
+        .alignment-table th.draggable:hover {
+            background: #d4c5b0;
+        }
+        .alignment-table th.draggable:active {
+            cursor: grabbing;
+        }
+        .alignment-table th.draggable::after {
+            content: "⋮⋮";
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8b7355;
+            font-size: 16px;
+            letter-spacing: 2px;
+            opacity: 0.6;
+        }
+        .alignment-table th.drag-over {
+            border-left: 3px solid #b89a7a !important;
+            background: #e8ddd0;
+        }
+        .alignment-table th.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        
+        /* Типы разночтений */
+        .diff-graphic {
+            background: #fde2e4 !important;
+            border-bottom: 2px solid #c0392b;
+        }
+        .diff-phonetic {
+            background: #fff3cd !important;
+            border-bottom: 2px solid #d4a017;
+        }
+        .diff-morph {
+            background: #d4edda !important;
+            border-bottom: 2px solid #27ae60;
+        }
+        .diff-lexical {
+            background: #e2d5f1 !important;
+            border-bottom: 2px solid #8e44ad;
+        }
+        .diff-syntax {
+            background: #d1ecf1 !important;
+            border-bottom: 2px solid #2980b9;
+        }
+        
+        /* Панель фильтрации типов */
+        .diff-filters {
+            background: #f0eae2;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            border: 1px solid #d4c5b0;
+        }
+        .diff-filters-title {
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 12px;
+        }
+        .diff-filters-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .diff-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 12px;
+            background: #fffbf5;
+            border-radius: 20px;
+            border: 1px solid #d4c5b0;
+            transition: all 0.2s;
+        }
+        .diff-filter-item:hover {
+            background: #e8ddd0;
+        }
+        .diff-filter-item input {
+            cursor: pointer;
+        }
+        .diff-filter-item label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #4a3d2c;
+        }
+        .diff-filter-item .color-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            margin-right: 4px;
+        }
+
+                /* Модальное окно контекста */
+        .context-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .context-modal.active {
+            display: flex;
+        }
+        
+        .context-content {
+            background: #fffbf5;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            border: 1px solid #d4c5b0;
+            position: relative;
+        }
+        
+        .context-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #8b7355;
+            transition: color 0.2s;
+        }
+        
+        .context-close:hover {
+            color: #4a3d2c;
+        }
+        
+        .context-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #3e3225;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #d4c5b0;
+        }
+        
+        .context-word-highlight {
+            background: #ffeaa7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            color: #c0392b;
+            border-bottom: 2px solid #e74c3c;
+        }
+        
+        .context-text {
+            font-family: 'Noto Serif', 'Times New Roman', serif;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #2c241a;
+            padding: 16px;
+            background: #fdfaf6;
+            border-radius: 8px;
+            border: 1px solid #e0d3c4;
+            margin-bottom: 12px;
+        }
+        
+        .context-meta {
+            font-size: 12px;
+            color: #8b7355;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
     </style>
 </head>
 <body>
@@ -85,157 +403,1462 @@
             <h1>📜 Притча о блудном сыне</h1>
             <p>Параллельный корпус · Лк 15:11-32 · Лабораторная работа №2</p>
         </div>
+        
         <div class="tabs">
-            <a href="/" class="tab">Транскрипция</a>
-            <a href="/corpus" class="tab active">Корпус</a>
-            <a href="/map" class="tab">Карта</a>
+            <div class="tab" onclick="window.location.href='/'">Транскрипция</div>
+            <div class="tab active">Корпус</div>
+            <div class="tab" onclick="window.location.href='/map'">Карта</div>
         </div>
+
+        <!-- Модальное окно контекста -->
+        <div class="context-modal" id="contextModal">
+            <div class="context-content">
+                <span class="context-close" onclick="closeContext()">✕</span>
+                <div class="context-title" id="contextTitle">Контекст</div>
+                <div class="context-text" id="contextText"></div>
+                <div class="context-meta">
+                    <span id="contextSource"></span>
+                    <span id="contextPosition"></span>
+                </div>
+            </div>
+        </div>
+        
         <div class="content">
             <div class="upload-area" id="dropZone">
-                <div style="font-size:48px;margin-bottom:16px;">📂</div>
-                <div>Загрузите файлы списков (XML-TEI)</div>
-                <div style="color:#9a8a78;">Перетащите или нажмите</div>
-                <input type="file" id="fileInput" multiple accept=".xml" style="display:none;">
+                <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
+                <div style="font-size: 18px; margin-bottom: 8px;">Загрузите файлы списков</div>
+                <div style="color: #9a8a78;">XML-TEI · Перетащите или нажмите для выбора</div>
+                <input type="file" id="fileInput" multiple accept=".xml" style="display: none;">
             </div>
+            
             <div id="fileList" class="file-list"></div>
+            
             <div class="controls">
-                <label>Листы: <input type="number" id="folioStart" value="117" style="width:60px;"> – 
-                <input type="number" id="folioEnd" value="119" style="width:60px;"></label>
-                <select id="mainMsSelect" disabled><option>Выберите главный список</option></select>
-                <button class="btn" id="alignBtn" disabled>🔗 Выровнять (сервер)</button>
-                <button class="btn btn-secondary" id="exportBtn" disabled>💾 XML-TEI</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <label style="font-size: 13px; color: #3e3225;">Листы главного списка:</label>
+                    <input type="number" id="folioStart" placeholder="От" min="1" max="500" value="117" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
+                    <span>–</span>
+                    <input type="number" id="folioEnd" placeholder="До" min="1" max="500" value="119" style="width: 70px; padding: 8px; border-radius: 6px; border: 1px solid #d4c5b0;">
+                </div>
+                <button class="btn" id="alignBtn" disabled>🔗 Выровнять списки</button>
+                <button class="btn btn-secondary" id="exportBtn" disabled>💾 Выгрузить XML-TEI</button>
+                <select id="mainMsSelect" style="padding: 12px; border-radius: 8px; border: 1px solid #d4c5b0;" disabled>
+                    <option value="">Выберите главный список</option>
+                </select>
             </div>
-            <div id="progress" style="display:none;"></div>
+            
+            <div id="progress" style="display: none;"></div>
             <div id="alignmentResult"></div>
         </div>
     </div>
+    
+
     <script>
-        let manuscripts = [];
+        
+        // Настройки отображения типов разночтений
+        let diffTypesEnabled = {
+            graphic: true,
+            phonetic: true,
+            morph: true,
+            lexical: true,
+            syntax: true
+        };
+        let uploadedFiles = [];
+        let manuscripts = [];  // [{ name, fullText, sheets }]
+        let columnVisibility = []; // true = показывать, false = скрыть
+        let columnOrder = []; // индексы в порядке отображения
         let alignedData = null;
-        const dz = document.getElementById('dropZone');
-        const fi = document.getElementById('fileInput');
-        const fl = document.getElementById('fileList');
-        const ab = document.getElementById('alignBtn');
-        const eb = document.getElementById('exportBtn');
-        const ms = document.getElementById('mainMsSelect');
-        const pd = document.getElementById('progress');
-
-        dz.onclick = () => fi.click();
-        dz.ondragover = e => { e.preventDefault(); dz.style.borderColor='#8b7355'; };
-        dz.ondragleave = () => { dz.style.borderColor='#c9af91'; };
-        dz.ondrop = e => { e.preventDefault(); dz.style.borderColor='#c9af91'; handleFiles(e.dataTransfer.files); };
-        fi.onchange = e => handleFiles(e.target.files);
-
-        // Клиентский парсинг XML (мгновенный)
-        async function handleFiles(files) {
-            pd.style.display = 'block'; pd.innerHTML = '⏳ Парсинг...';
-            manuscripts = [];
-            for (let file of files) {
-                if (!file.name.endsWith('.xml')) continue;
-                try {
-                    const text = await file.text();
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(text, 'application/xml');
-                    const words = [];
-                    doc.querySelectorAll('w, pc').forEach(el => {
-                        const t = el.textContent.trim();
-                        if (t && !'·⸱※∽⁘:.,;!?'.includes(t)) words.push(t);
-                    });
-                    if (words.length > 0) {
-                        manuscripts.push({ name: file.name, words, word_count: words.length, fullText: words.join(' ') });
+        
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const alignBtn = document.getElementById('alignBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const mainMsSelect = document.getElementById('mainMsSelect');
+        const progressDiv = document.getElementById('progress');
+        const folioStart = document.getElementById('folioStart');
+        const folioEnd = document.getElementById('folioEnd');
+        
+        // Drag & drop
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#8b7355';
+            dropZone.style.background = '#faf5ef';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#c9af91';
+            dropZone.style.background = 'transparent';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#c9af91';
+            dropZone.style.background = 'transparent';
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        // Функция извлечения текста из XML
+        function extractTextFromXML(xmlString) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xmlString, 'application/xml');
+            
+            const words = [];
+            const sheets = [];
+            let currentSheet = null;
+            
+            // Проходим по всем элементам в порядке их следования
+            const allElements = doc.querySelectorAll('*');
+            
+            for (let el of allElements) {
+                // Отслеживаем листы
+                if (el.tagName === 'milestone' && el.getAttribute('unit') === 'sheet') {
+                    const n = el.getAttribute('n');
+                    if (n) {
+                        currentSheet = parseInt(n);
+                        if (!isNaN(currentSheet)) {
+                            sheets.push({ index: words.length, sheet: currentSheet });
+                        }
                     }
-                } catch(e) { alert('Ошибка в '+file.name+': '+e.message); return; }
+                }
+                
+                // Собираем текст из w и pc
+                if (el.tagName === 'w' || el.tagName === 'pc') {
+                    const t = el.textContent.trim();
+                    if (t && !['·', '⸱', '※', '∽', ':', '.', '⁘'].includes(t)) {
+                        words.push(t);
+                    }
+                }
             }
-            pd.innerHTML = '✅ Готово: '+manuscripts.length+' списков';
-            setTimeout(() => pd.style.display='none', 1500);
-            renderList();
+            
+            return {
+                fullText: words.join(' '),
+                words: words,
+                sheets: sheets
+            };
         }
-
-        function renderList() {
-            fl.innerHTML = manuscripts.map((m,i) => `<div class="file-item"><span>📄 ${m.name} (${m.word_count} слов)</span><span class="file-remove" onclick="manuscripts.splice(${i},1);renderList();updateUI();">✕</span></div>`).join('');
-            ms.innerHTML = '<option value="">Выберите главный список</option>' + manuscripts.map((m,i) => `<option value="${i}">${m.name}</option>`).join('');
+        
+        // Фильтрация текста по листам
+        function filterTextBySheets(data, startSheet, endSheet) {
+            if (!startSheet || !endSheet) return data.fullText;
+            
+            const start = parseInt(startSheet);
+            const end = parseInt(endSheet);
+            
+            // Находим индексы слов для указанных листов
+            let startIdx = 0;
+            let endIdx = data.words.length;
+            
+            for (let sheet of data.sheets) {
+                if (sheet.sheet === start) {
+                    startIdx = sheet.index;
+                }
+                if (sheet.sheet === end + 1) {
+                    endIdx = sheet.index;
+                    break;
+                }
+            }
+            
+            return data.words.slice(startIdx, endIdx).join(' ');
+        }
+        
+        async function handleFiles(files) {
+            for (let file of files) {
+                if (file.name.endsWith('.xml') && !uploadedFiles.find(f => f.name === file.name)) {
+                    uploadedFiles.push(file);
+                }
+            }
+            renderFileList();
+            
+            if (uploadedFiles.length > 0) {
+                progressDiv.style.display = 'block';
+                progressDiv.className = 'progress';
+                progressDiv.innerHTML = '⏳ Парсинг XML-файлов...';
+                
+                manuscripts = [];
+                
+                for (let i = 0; i < uploadedFiles.length; i++) {
+                    const file = uploadedFiles[i];
+                    progressDiv.innerHTML = `⏳ Парсинг ${i+1}/${uploadedFiles.length}: ${file.name}...`;
+                    
+                    try {
+                        const xmlText = await file.text();
+                        const extracted = extractTextFromXML(xmlText);
+                        
+                        manuscripts.push({
+                            name: file.name,
+                            data: extracted,
+                        });
+                        
+                    } catch (err) {
+                        console.error('Ошибка парсинга:', file.name, err);
+                        manuscripts.push({
+                            name: file.name,
+                            data: { fullText: '[Ошибка парсинга]', words: [], sheets: [] }
+                        });
+                    }
+                }
+                
+                progressDiv.innerHTML = '✅ Парсинг завершён!';
+                setTimeout(() => { progressDiv.style.display = 'none'; }, 1500);
+            }
+            
             updateUI();
         }
-
-        function updateUI() {
-            ab.disabled = manuscripts.length < 2 || ms.value === '';
-            eb.disabled = !alignedData;
-            ms.disabled = manuscripts.length < 2;
-        }
-
-        ms.onchange = updateUI;
-
-        // Серверное выравнивание
-        ab.onclick = async () => {
-            const mainIdx = parseInt(ms.value);
-            if (isNaN(mainIdx)) return;
-            pd.style.display = 'block'; pd.innerHTML = '⏳ Выравнивание на сервере...';
-            try {
-                const resp = await fetch('/align', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ manuscripts, main_index: mainIdx })
-                });
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка');
-                alignedData = await resp.json();
-                pd.style.display = 'none';
-                renderAlignment(alignedData);
-                eb.disabled = false;
-            } catch(e) { pd.innerHTML = '❌ '+e.message; }
-        };
-
-        function renderAlignment(d) {
-            const c = document.getElementById('alignmentResult');
-            const s = d.statistics;
-            let h = `<div class="stats"><h3>📊 Статистика</h3>`;
-            h += `<span class="stat-item">Всего: <b>${s.total}</b></span>`;
-            h += `<span class="stat-item">✅ Совпадений: <b>${s.match}</b> (${s.match_percent}%)</span>`;
-            h += `<span class="stat-item">✏️ Графические: <b>${s.graphic}</b></span>`;
-            h += `<span class="stat-item">🗣️ Фонетические: <b>${s.phonetic}</b></span>`;
-            h += `<span class="stat-item">📐 Морфологические: <b>${s.morph}</b></span>`;
-            h += `<span class="stat-item">📚 Лексические: <b>${s.lexical}</b></span>`;
-            h += `<span class="stat-item">➕ Вставки: <b>${s.insertion}</b></span>`;
-            h += `</div>`;
-            h += '<div style="overflow:auto;max-height:600px;"><table class="alignment-table"><thead><tr><th>№</th>';
-            d.manuscript_names.forEach(n => h += `<th>${n}</th>`);
-            h += '<th>Тип</th></tr></thead><tbody>';
-            
-            const cls = {graphic:'diff-graphic',phonetic:'diff-phonetic',morph:'diff-morph',lexical:'diff-lexical',insertion:'diff-insertion',deletion:'diff-deletion'};
-            const lbl = {graphic:'ГР',phonetic:'ФН',morph:'МФ',lexical:'ЛК',insertion:'ВСТ',deletion:'УД'};
-            const col = {graphic:'#c0392b',phonetic:'#d4a017',morph:'#27ae60',lexical:'#8e44ad',insertion:'#e74c3c',deletion:'#636e72'};
-            
-            for (let i = 0; i < d.alignment.length; i++) {
-                h += '<tr><td><b>'+(i+1)+'</b></td>';
-                d.alignment[i].forEach((w, j) => {
-                    const dt = j > 0 && d.diff_types[i] ? d.diff_types[i][j-1] : '';
-                    h += `<td class="${cls[dt]||''}">${w||'—'}</td>`;
-                });
-                h += '<td>';
-                if (d.diff_types[i]) {
-                    const types = [...new Set(d.diff_types[i].filter(t => t !== 'match'))];
-                    types.forEach(t => h += `<span style="background:${col[t]};color:white;padding:2px 6px;border-radius:4px;margin:1px;font-size:11px;">${lbl[t]}</span>`);
-                    if (!types.length) h += '✓';
-                }
-                h += '</td></tr>';
+        
+        function renderFileList() {
+            if (uploadedFiles.length === 0) {
+                fileList.innerHTML = '';
+                return;
             }
-            h += '</tbody></table></div>';
-            c.innerHTML = h;
+            let html = '<h3 style="margin-bottom: 12px; color: #3e3225;">Загруженные списки:</h3>';
+            uploadedFiles.forEach((file, index) => {
+                html += `
+                    <div class="file-item">
+                        <span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+                        <span class="file-remove" onclick="removeFile(${index})">✕</span>
+                    </div>
+                `;
+            });
+            fileList.innerHTML = html;
+            
+            let options = '<option value="">Выберите главный список</option>';
+            uploadedFiles.forEach((file, index) => {
+                options += `<option value="${index}">${file.name}</option>`;
+            });
+            mainMsSelect.innerHTML = options;
+        }
+        
+        window.removeFile = function(index) {
+            uploadedFiles.splice(index, 1);
+            manuscripts.splice(index, 1);
+            renderFileList();
+            updateUI();
+        };
+        
+        function updateUI() {
+            alignBtn.disabled = uploadedFiles.length < 2;
+            exportBtn.disabled = !alignedData;
+            mainMsSelect.disabled = uploadedFiles.length < 2;
+        }
+        
+        function alignMultiple(mainWords, otherWordsArray) {
+            const allLists = [mainWords, ...otherWordsArray];
+            const numLists = allLists.length;
+            
+            // Функция: выровнять две последовательности, вернуть [seq1_aligned, seq2_aligned]
+            function alignTwo(seq1, seq2) {
+                return needlemanWunsch(seq1, seq2);
+            }
+            
+            // Строим направляющее дерево: выравниваем все с первым (главным)
+            // и запоминаем позиции вставок в главном
+            const alignments = [];
+            let masterGaps = new Set(); // позиции в главном, где нужен пропуск
+            
+            for (let i = 0; i < otherWordsArray.length; i++) {
+                const [alignedMain, alignedOther] = alignTwo(mainWords, otherWordsArray[i]);
+                
+                // Отмечаем позиции, где в alignedMain появились пропуски (вставки в другом списке)
+                for (let pos = 0; pos < alignedMain.length; pos++) {
+                    if (alignedMain[pos] === '—') {
+                        masterGaps.add(pos);
+                    }
+                }
+                
+                alignments.push({ main: alignedMain, other: alignedOther });
+            }
+            
+            // Получаем отсортированный список позиций пропусков
+            const gapPositions = Array.from(masterGaps).sort((a, b) => a - b);
+            
+            // Строим единую матрицу: для каждого списка создаем массив слов,
+            // вставляя пропуски в нужных местах
+            const maxAlignedLen = Math.max(
+                mainWords.length + gapPositions.length,
+                ...alignments.map(a => a.main.length)
+            );
+            
+            // Создаем расширенный главный список с пропусками
+            const expandedMain = [];
+            let mainIdx = 0;
+            let gapIdx = 0;
+            
+            for (let pos = 0; pos < maxAlignedLen; pos++) {
+                if (gapIdx < gapPositions.length && gapPositions[gapIdx] === pos) {
+                    expandedMain.push('—');
+                    gapIdx++;
+                } else if (mainIdx < mainWords.length) {
+                    expandedMain.push(mainWords[mainIdx]);
+                    mainIdx++;
+                } else {
+                    expandedMain.push('—');
+                }
+            }
+            
+            // Создаем выровненные списки для остальных
+            const expandedOthers = alignments.map(align => {
+                const result = [];
+                let otherIdx = 0;
+                
+                for (let pos = 0; pos < expandedMain.length; pos++) {
+                    if (expandedMain[pos] === '—') {
+                        // В главном пропуск — в другом может быть слово
+                        if (otherIdx < align.other.length) {
+                            // Ищем соответствующее слово
+                            const word = align.other[otherIdx];
+                            // Проверяем, не соответствует ли это слово пропуску в главном
+                            if (pos < align.main.length && align.main[pos] === '—') {
+                                result.push(word);
+                                otherIdx++;
+                            } else {
+                                result.push('—');
+                            }
+                        } else {
+                            result.push('—');
+                        }
+                    } else {
+                        // В главном слово — в другом должно быть соответствие
+                        if (otherIdx < align.other.length) {
+                            result.push(align.other[otherIdx]);
+                            otherIdx++;
+                        } else {
+                            result.push('—');
+                        }
+                    }
+                }
+                
+                return result;
+            });
+            
+            return {
+                mainWords: expandedMain,
+                alignments: expandedOthers.map(arr =>
+                    arr.map(word => ({ other: word }))
+                )
+            };
         }
 
-        // Экспорт
-        eb.onclick = async () => {
-            if (!alignedData) return;
-            const resp = await fetch('/export_tei', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ data: alignedData })
+        
+        // ==================== ЛЕВЕНШТЕЙН ====================
+        function levenshtein(a, b) {
+            const dp = Array.from({ length: a.length + 1 }, () =>
+                Array(b.length + 1).fill(0)
+            );
+        
+            for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+            for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+        
+            for (let i = 1; i <= a.length; i++) {
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                    dp[i][j] = Math.min(
+                        dp[i - 1][j] + 1,
+                        dp[i][j - 1] + 1,
+                        dp[i - 1][j - 1] + cost
+                    );
+                }
+            }
+        
+            return dp[a.length][b.length];
+        }
+
+        // ==================== НОРМАЛИЗАЦИЯ ====================
+        function normalize(word) {
+            if (!word || word === '—') return '';
+        
+            return word.toLowerCase()
+                .replace(/[·⸱※∽⁘:.,;!?]+/g, '')
+                .replace(/[҃҄҅҆]/g, '')
+                .replace(/[ъь]$/, '')
+                .replace(/[ѣ]/g, 'е')
+                .replace(/[іѵї]/g, 'и')
+                .replace(/[ѡꙩ]/g, 'о')
+                .replace(/[ѧꙗ]/g, 'я')
+                .replace(/[ѳ]/g, 'ф')
+                .replace(/[ꙋѹоу]/g, 'у');
+        }
+
+        // ==================== УМНАЯ МЕТРИКА ====================
+        function similarity(a, b) {
+            const MATCH = 6;
+            const PARTIAL = 2;
+            const MISMATCH = -4;
+        
+            const na = normalize(a);
+            const nb = normalize(b);
+        
+            if (!na && !nb) return 0;
+            if (na === nb) return MATCH;
+        
+            // ЯКОРЯ
+            const anchors = ['и','же','въ','не','на','къ','съ','от','за','яко'];
+            if (anchors.includes(na) && anchors.includes(nb)) {
+                return MATCH;
+            }
+        
+            const dist = levenshtein(na, nb);
+            const maxLen = Math.max(na.length, nb.length);
+        
+            if (maxLen === 0) return 0;
+        
+            const ratio = dist / maxLen;
+        
+            if (ratio < 0.25) return PARTIAL;
+            if (ratio < 0.5) return 0;
+        
+            return MISMATCH;
+        }
+
+        // ==================== NEEDLEMAN-WUNSCH ====================
+        function needlemanWunsch(seq1, seq2) {
+            const GAP = -6;
+        
+            const n = seq1.length;
+            const m = seq2.length;
+        
+            const dp = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(0)
+            );
+        
+            const trace = Array.from({ length: n + 1 }, () =>
+                Array(m + 1).fill(null)
+            );
+        
+            for (let i = 1; i <= n; i++) {
+                dp[i][0] = i * GAP;
+                trace[i][0] = 'up';
+            }
+        
+            for (let j = 1; j <= m; j++) {
+                dp[0][j] = j * GAP;
+                trace[0][j] = 'left';
+            }
+        
+            for (let i = 1; i <= n; i++) {
+                for (let j = 1; j <= m; j++) {
+        
+                    const match = dp[i - 1][j - 1] + similarity(seq1[i - 1], seq2[j - 1]);
+                    const del = dp[i - 1][j] + GAP;
+                    const ins = dp[i][j - 1] + GAP;
+        
+                    const max = Math.max(match, del, ins);
+                    dp[i][j] = max;
+        
+                    if (max === match) trace[i][j] = 'diag';
+                    else if (max === del) trace[i][j] = 'up';
+                    else trace[i][j] = 'left';
+                }
+            }
+        
+            let i = n, j = m;
+            const aligned1 = [];
+            const aligned2 = [];
+        
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && trace[i][j] === 'diag') {
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift(seq2[j - 1]);
+                    i--; j--;
+                } else if (i > 0 && trace[i][j] === 'up') {
+                    aligned1.unshift(seq1[i - 1]);
+                    aligned2.unshift('—');
+                    i--;
+                } else {
+                    aligned1.unshift('—');
+                    aligned2.unshift(seq2[j - 1]);
+                    j--;
+                }
+            }
+        
+            return [aligned1, aligned2];
+        }
+                // ==================== КОНСТАНТЫ ДЛЯ ОПРЕДЕЛЕНИЯ РАЗНОЧТЕНИЙ ====================
+        
+        // Графические пары (разные буквы для одного звука)
+        const GRAPHIC_PAIRS = [
+            ['ѹ', 'у'], ['ꙋ', 'у'], ['оу', 'у'],
+            ['ѡ', 'о'], ['ꙩ', 'о'],
+            ['ѣ', 'е'], ['ꙗ', 'я'], ['ѧ', 'я'],
+            ['і', 'и'], ['ї', 'и'], ['ѵ', 'и'],
+            ['ѳ', 'ф'], ['ѯ', 'кс'], ['ѱ', 'пс'],
+            ['ꙁ', 'з'], ['ѕ', 'з'],
+            ['ꙑ', 'ы'], ['ꙓ', 'е'],
+            ['҃', ''], ['҄', ''], ['҅', ''], ['҆', ''], // титла
+            ['·', ''], ['⸱', ''], ['※', ''], ['∽', '']
+        ];
+        
+        // Фонетические признаки (чередования)
+        const PHONETIC_PATTERNS = [
+            ['оро', 'ра'], ['оло', 'ла'], ['ере', 'ре'], ['ело', 'ле'], // полногласие
+            ['жд', 'ж'], ['щ', 'ч'], ['ц', 'ч'], ['з', 'ж'], ['с', 'ш'],
+            ['г', 'ж'], ['к', 'ч'], ['х', 'ш']
+        ];
+        
+        // Морфологические окончания
+        const MORPH_ENDINGS = [
+            ['ъ', ''], ['ь', ''],
+            ['ого', 'ова'], ['его', 'ева'],
+            ['ыя', 'ой'], ['ия', 'ей'],
+            ['ти', 'ть'], ['щи', 'чь'],
+            ['аго', 'ого'], ['яго', 'его'],
+            ['ѣ', 'е']
+        ];
+        
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toLowerCase()
+                .replace(/[·⸱※∽⁘:.,;!?·\s]+/g, ' ')
+                .replace(/[҃҄҅҆]/g, '')
+                .trim();
+        }
+
+        function getDiffClass(type) {
+            if (!type) return '';
+            const classes = {
+                'graphic': 'diff-graphic',
+                'phonetic': 'diff-phonetic',
+                'morph': 'diff-morph',
+                'lexical': 'diff-lexical',
+                'syntax': 'diff-syntax',
+                'insertion': 'diff-insertion',
+                'deletion': 'diff-deletion'
+            };
+            return classes[type] || '';
+        }
+
+         // ==================== ОПРЕДЕЛЕНИЕ ТИПА РАЗНОЧТЕНИЯ ====================
+        
+                function detectWordDiffType(mainWord, otherWord) {
+            if (!mainWord || !otherWord) return null;
+            if (mainWord === otherWord) return null;
+            if (mainWord === '—' || otherWord === '—') return 'insertion';
+            
+            // Нормализация ОБОИХ слов
+            const normMain = normalizeText(mainWord);
+            const normOther = normalizeText(otherWord);
+            
+            if (normMain === normOther) return null;
+            
+            // Графические
+            let mainNoGraphic = normMain;
+            let otherNoGraphic = normOther;
+            for (let [old, new_] of GRAPHIC_PAIRS) {
+                const regex = new RegExp(old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                mainNoGraphic = mainNoGraphic.replace(regex, new_);
+                otherNoGraphic = otherNoGraphic.replace(regex, new_);
+            }
+            if (mainNoGraphic === otherNoGraphic) {
+                return 'graphic';
+            }
+            
+            // Фонетические
+            for (let [p1, p2] of PHONETIC_PATTERNS) {
+                if ((normMain.includes(p1) && normOther.includes(p2)) || 
+                    (normMain.includes(p2) && normOther.includes(p1))) {
+                    return 'phonetic';
+                }
+            }
+            
+            // Морфологические: общая основа > 3 букв
+            let commonPrefix = '';
+            for (let i = 0; i < Math.min(mainNoGraphic.length, otherNoGraphic.length); i++) {
+                if (mainNoGraphic[i] === otherNoGraphic[i]) {
+                    commonPrefix += mainNoGraphic[i];
+                } else {
+                    break;
+                }
+            }
+            
+            if (commonPrefix.length >= 3) {
+                const suffix1 = mainNoGraphic.slice(commonPrefix.length);
+                const suffix2 = otherNoGraphic.slice(commonPrefix.length);
+                if (suffix1.length <= 3 && suffix2.length <= 3) {
+                    return 'morph';
+                }
+            }
+            
+            return 'lexical';
+        }
+
+        // Статистика разночтений
+        function calculateDiffStats() {
+            const stats = {
+                'graphic': 0,
+                'phonetic': 0,
+                'morph': 0,
+                'lexical': 0,
+                'match': 0
+            };
+            
+            if (!alignedData) return stats;
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const mainWord = alignedData.mainWords[i];
+                
+                alignedData.alignments.forEach(alignment => {
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    if (diffType && stats[diffType] !== undefined) {
+                        stats[diffType]++;
+                    } else if (!diffType && mainWord === otherWord) {
+                        stats.match++;
+                    }
+                });
+            }
+            
+            return stats;
+        }
+
+        function getColorForType(type) {
+            const colors = {
+                'graphic': '#c0392b',
+                'phonetic': '#d4a017',
+                'morph': '#27ae60',
+                'lexical': '#8e44ad',
+                'syntax': '#2980b9',
+                'match': '#95a5a6',
+                'insertion': '#e74c3c'
+            };
+            return colors[type] || '#95a5a6';
+        }
+
+        function getShortLabel(type) {
+            const labels = {
+                'graphic': 'ГР',
+                'phonetic': 'ФН',
+                'morph': 'МФ',
+                'lexical': 'ЛК',
+                'syntax': 'СН',
+                'insertion': 'ВСТ'
+            };
+            return labels[type] || type;
+        }
+        
+        
+        // ==================== НОВЫЙ ОБРАБОТЧИК ВЫРАВНИВАНИЯ ====================
+        
+               alignBtn.addEventListener('click', () => {
+            if (uploadedFiles.length < 2) return;
+            
+            const mainIndex = parseInt(mainMsSelect.value);
+            if (isNaN(mainIndex)) {
+                alert('Выберите главный список');
+                return;
+            }
+            
+            const startSheet = folioStart.value;
+            const endSheet = folioEnd.value;
+            
+            progressDiv.style.display = 'block';
+            progressDiv.innerHTML = '⏳ Подготовка текста...';
+            
+            const mainMs = manuscripts[mainIndex];
+            const mainText = filterTextBySheets(mainMs.data, startSheet, endSheet);
+            const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
+            
+            const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
+            
+            progressDiv.innerHTML = '⏳ Множественное выравнивание...';
+            
+            // Собираем слова из остальных списков
+            const otherWordsArray = otherMss.map(ms => {
+                const text = ms.data.fullText;
+                return text.split(/\s+/).filter(w => w.length > 0);
             });
-            const blob = await resp.blob();
+            
+            // Множественное выравнивание
+            const { alignments, mainWords: newMainWords } = alignMultiple(mainWords, otherWordsArray);
+            
+            alignedData = {
+                main: mainMs.name,
+                aligned: otherMss.map(m => m.name),
+                mainWords: newMainWords,
+                alignments: alignments
+            };
+            
+            progressDiv.style.display = 'none';
+            renderWordAlignmentTable();
+            exportBtn.disabled = false;
+        });
+
+        // ==================== ОТРИСОВКА ТАБЛИЦЫ ПОСЛОВНОГО ВЫРАВНИВАНИЯ ====================
+        
+        function renderWordAlignmentTable() {
+            const container = document.getElementById('alignmentResult');
+            const startSheet = folioStart.value || '?';
+            const endSheet = folioEnd.value || '?';
+            
+            if (!alignedData) return;
+            
+            initColumnOrder();
+            
+            let html = '<h3 style="margin: 24px 0 16px; color: #3e3225;">📖 Пословное выравнивание</h3>';
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Листы главного списка: ${startSheet}–${endSheet}</p>`;
+            html += `<p style="margin-bottom: 8px; color: #6b5a4a;">Слов в главном списке: ${alignedData.mainWords.length}</p>`;
+            html += '<p style="margin-bottom: 8px; font-size: 13px; color: #8b7355;">✏️ Двойной клик по ячейке — редактирование</p>';
+            
+            // Статистика
+            const stats = calculateDiffStats();
+            html += '<div style="margin: 16px 0; padding: 16px; background: #f0eae2; border-radius: 12px;">';
+            html += '<h4 style="margin-bottom: 12px;">📊 Статистика разночтений:</h4>';
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 16px;">';
+            
+            const statLabels = {
+                'graphic': 'Графические',
+                'phonetic': 'Фонетические',
+                'morph': 'Морфологические',
+                'lexical': 'Лексические',
+                'match': 'Совпадения'
+            };
+            
+            Object.entries(stats).forEach(([type, count]) => {
+                if (statLabels[type]) {
+                    html += `<div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="background: ${getColorForType(type)}; width: 16px; height: 16px; border-radius: 4px;"></span>
+                        <span>${statLabels[type]}: <strong>${count}</strong></span>
+                    </div>`;
+                }
+            });
+            
+            html += '</div></div>';
+            
+            // Панель фильтрации типов разночтений
+            html += renderDiffFilters();
+            
+            // Панель выбора колонок
+            html += renderColumnToggles();
+            
+            // Таблица
+            html += '<div style="overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid #d4c5b0; border-radius: 8px;">';
+            html += '<table class="alignment-table" style="min-width: 100%;">';
+            
+            // Заголовки
+            html += '<thead><tr>';
+            html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;">№</th>';
+            
+            // Все имена списков
+            const allNames = [alignedData.main, ...alignedData.aligned];
+            
+            // Заголовки в порядке columnOrder
+            columnOrder.forEach((idx, pos) => {
+                const isMain = idx === 0;
+                const name = allNames[idx];
+                const draggableClass = isMain ? '' : 'draggable';
+                const mainBadge = isMain ? ' (главный)' : '';
+                html += `<th class="${draggableClass}" style="position: sticky; top: 0; background: #e8ddd0; z-index: 10;" data-col-index="${idx}" data-col-pos="${pos}" draggable="${!isMain}">${name}${mainBadge}</th>`;
+                if (!isMain) {
+                    html += '<th style="position: sticky; top: 0; background: #e8ddd0; z-index: 10; width: 80px;">Тип</th>';
+                }
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            // Строки таблицы
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                html += '<tr>';
+                html += '<td><strong>' + (i + 1) + '</strong></td>';
+                
+                columnOrder.forEach(idx => {
+                    if (idx === 0) {
+                        // Главный список
+                        html += '<td class="verse-text" data-col="0" data-row="' + i + '">' + escapeHtml(alignedData.mainWords[i]) + '</td>';
+                    } else {
+                        // Остальные списки
+                        const listIdx = idx - 1;
+                        const alignment = alignedData.alignments[listIdx];
+                        const pair = alignment[i] || { main: alignedData.mainWords[i], other: '—', type: 'missing' };
+                        const otherWord = pair.other || '—';
+                        const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
+                        const diffClass = diffType ? getDiffClass(diffType) : '';
+                        
+                        html += `<td class="verse-text ${diffClass}" data-col="${idx}" data-row="${i}">${escapeHtml(otherWord)}</td>`;
+                        html += '<td style="font-size: 12px; color: #6b5a4a;">';
+                        if (diffType) {
+                            html += `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
+                        } else {
+                            html += '✓';
+                        }
+                        html += '</td>';
+                    }
+                });
+                
+                html += '</tr>';
+            }
+            
+            html += '</tbody></table></div>';
+            
+            // Кнопки
+            html += `
+                <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="saveSession()">💾 Сохранить сессию</button>
+                    <button class="btn btn-secondary" onclick="loadSession()">📂 Загрузить сессию</button>
+                    <button class="btn btn-secondary" onclick="updateAlignedDataFromTable(); alert('✅ Правки зафиксированы')">✏️ Зафиксировать правки</button>
+                    <button class="btn btn-secondary" onclick="resetColumnOrder()">🔄 Сбросить порядок</button>
+                    <button class="btn btn-secondary" onclick="exportWordAlignmentCSV()">📥 Экспорт CSV</button>
+                    <button class="btn btn-secondary" onclick="copyStatsToClipboard()">📋 Копировать статистику</button>
+                </div>
+            `;
+            // Добавляем обработчики клика для контекста
+            setTimeout(() => {
+                document.querySelectorAll('.verse-text').forEach(cell => {
+                    cell.addEventListener('click', function(e) {
+                        // Не показываем контекст при двойном клике (редактирование)
+                        if (this.classList.contains('editing')) return;
+                        
+                        const word = this.textContent.trim();
+                        if (!word || word === '—') return;
+                        
+                        const colIdx = parseInt(this.dataset.col);
+                        const allNames = [alignedData.main, ...alignedData.aligned];
+                        const manuscriptName = allNames[colIdx];
+                        
+                        if (manuscriptName) {
+                            showContext(word, manuscriptName);
+                        }
+                    });
+                    
+                    // Стиль курсора
+                    cell.style.cursor = 'pointer';
+                    cell.title = 'Нажмите для просмотра контекста';
+                });
+            }, 100);
+            
+            container.innerHTML = html;
+            
+            // Навешиваем обработчики
+            setupDragAndDrop();
+            applyColumnVisibility();
+            applyDiffHighlights();
+            makeEditable();
+        }
+
+        // ==================== ЭКСПОРТ ====================
+        
+        window.exportWordAlignmentCSV = function() {
+            if (!alignedData) return;
+            
+            let csv = '№,Главный список (' + alignedData.main + ')';
+            alignedData.aligned.forEach(name => {
+                csv += ',' + name + ',Тип разночтения';
+            });
+            csv += '\n';
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                csv += (i + 1) + ',"' + alignedData.mainWords[i] + '"';
+                
+                alignedData.alignments.forEach(alignment => {
+                    const pair = alignment[i] || { other: '—' };
+                    const otherWord = pair.other || '—';
+                    const diffType = detectWordDiffType(alignedData.mainWords[i], otherWord);
+                    csv += ',"' + otherWord + '",' + (diffType || 'совпадение');
+                });
+                
+                csv += '\n';
+            }
+            
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'aligned_corpus.xml';
+            a.download = 'word_alignment.csv';
             a.click();
         };
+
+        window.copyStatsToClipboard = function() {
+            const stats = calculateDiffStats();
+            let text = 'Статистика разночтений:\n';
+            text += `Графические: ${stats.graphic}\n`;
+            text += `Фонетические: ${stats.phonetic}\n`;
+            text += `Морфологические: ${stats.morph}\n`;
+            text += `Лексические: ${stats.lexical}\n`;
+            text += `Совпадения: ${stats.match}\n`;
+            
+            navigator.clipboard.writeText(text);
+            alert('Статистика скопирована!');
+        };
+
+        // ==================== АДАПТИРОВАННЫЕ ФУНКЦИИ ДЛЯ НОВОЙ СТРУКТУРЫ ====================
+
+        function renderColumnToggles() {
+            if (!alignedData) return '';
+            
+            const allColumns = [alignedData.main, ...alignedData.aligned];
+            
+            if (columnVisibility.length !== allColumns.length) {
+                columnVisibility = allColumns.map(() => true);
+            }
+            
+            let html = '<div class="column-toggles">';
+            html += '<div class="column-toggles-title">👁️ Показывать списки:</div>';
+            html += '<div class="column-toggles-list">';
+            
+            allColumns.forEach((name, index) => {
+                const checked = columnVisibility[index] ? 'checked' : '';
+                const isMain = index === 0;
+                html += `
+                    <div class="column-toggle-item" onclick="toggleColumn(${index})">
+                        <input type="checkbox" id="colToggle${index}" ${checked} ${isMain ? 'disabled' : ''}>
+                        <label for="colToggle${index}" style="${isMain ? 'font-weight:600;' : ''}">${name}</label>
+                        ${isMain ? '<span style="font-size:11px; color:#8b7355;">(главный)</span>' : ''}
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        window.toggleColumn = function(index) {
+            const checkbox = document.getElementById(`colToggle${index}`);
+            if (checkbox) {
+                columnVisibility[index] = checkbox.checked;
+                applyColumnVisibility();
+            }
+        };
+        
+        function applyColumnVisibility() {
+            if (!alignedData) return;
+            
+            const table = document.querySelector('.alignment-table');
+            if (!table) return;
+            
+            const headers = table.querySelectorAll('thead th:not(:first-child)');
+            
+            headers.forEach((th, idx) => {
+                const colIndex = parseInt(th.dataset.colIndex);
+                if (!columnVisibility[colIndex]) {
+                    th.classList.add('hidden-column');
+                } else {
+                    th.classList.remove('hidden-column');
+                }
+            });
+            
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td:not(:first-child)');
+                cells.forEach((td, idx) => {
+                    const colIdx = parseInt(td.dataset.col);
+                    if (!columnVisibility[colIdx]) {
+                        td.classList.add('hidden-column');
+                    } else {
+                        td.classList.remove('hidden-column');
+                    }
+                });
+            });
+        }
+
+        function initColumnOrder() {
+            if (!alignedData) return;
+            const totalCols = 1 + alignedData.aligned.length;
+            if (columnOrder.length !== totalCols) {
+                columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            }
+        }
+        
+        function moveColumn(fromIndex, toIndex) {
+            if (fromIndex === 0 || toIndex === 0) {
+                alert('Главный список всегда должен быть первым');
+                return false;
+            }
+            
+            if (fromIndex === toIndex) return false;
+            
+            const item = columnOrder.splice(fromIndex, 1)[0];
+            columnOrder.splice(toIndex, 0, item);
+            
+            return true;
+        }
+
+        window.resetColumnOrder = function() {
+            if (!alignedData) return;
+            const totalCols = 1 + alignedData.aligned.length;
+            columnOrder = Array.from({ length: totalCols }, (_, i) => i);
+            
+            renderWordAlignmentTable();
+            alert('Порядок сброшен');
+        };
+
+        // Адаптированная подсветка для пословного режима
+        function applyDiffHighlights() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
+                
+                const cells = row.querySelectorAll('td.verse-text');
+                const mainWord = alignedData.mainWords[i];
+                
+                cells.forEach((cell, cellIdx) => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    if (colIdx === 0) return; // Главный список не подсвечиваем
+                    
+                    const listIdx = colIdx - 1;
+                    const alignment = alignedData.alignments[listIdx];
+                    const pair = alignment[i];
+                    if (!pair) return;
+                    
+                    const otherWord = pair.other || '—';
+                    
+                    cell.classList.remove('diff-graphic', 'diff-phonetic', 'diff-morph', 'diff-lexical', 'diff-syntax');
+                    
+                    const diffType = detectWordDiffType(mainWord, otherWord);
+                    
+                    if (diffType && diffTypesEnabled[diffType]) {
+                        cell.classList.add(getDiffClass(diffType));
+                    }
+                });
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Адаптированное редактирование
+        function makeEditable() {
+            document.querySelectorAll('.verse-text').forEach(cell => {
+                cell.removeEventListener('dblclick', handleDoubleClick);
+                cell.addEventListener('dblclick', handleDoubleClick);
+            });
+        }
+        
+        function handleDoubleClick(e) {
+            const cell = e.currentTarget;
+            
+            if (cell.classList.contains('editing')) return;
+            
+            const originalText = cell.textContent;
+            const rowIdx = parseInt(cell.dataset.row);
+            const colIdx = parseInt(cell.dataset.col);
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = originalText;
+            
+            cell.classList.add('editing');
+            cell.textContent = '';
+            cell.appendChild(textarea);
+            textarea.focus();
+            
+            const save = () => {
+                const newText = textarea.value.trim() || originalText;
+                cell.textContent = newText;
+                cell.classList.remove('editing');
+                
+                // Обновляем alignedData
+                if (alignedData) {
+                    if (colIdx === 0) {
+                        alignedData.mainWords[rowIdx] = newText;
+                    } else {
+                        const listIdx = colIdx - 1;
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][rowIdx]) {
+                            alignedData.alignments[listIdx][rowIdx].other = newText;
+                        }
+                    }
+                }
+                
+                // Обновляем тип разночтения
+                updateDiffTypeForCell(rowIdx, colIdx);
+                exportBtn.disabled = false;
+            };
+            
+            textarea.addEventListener('blur', save);
+            
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    save();
+                }
+                if (e.key === 'Escape') {
+                    cell.textContent = originalText;
+                    cell.classList.remove('editing');
+                }
+            });
+        }
+
+        function updateDiffTypeForCell(rowIdx, colIdx) {
+            if (colIdx === 0) return;
+            
+            const row = document.querySelectorAll('.alignment-table tbody tr')[rowIdx];
+            if (!row) return;
+            
+            const cells = row.querySelectorAll('td');
+            const mainWord = alignedData.mainWords[rowIdx];
+            const listIdx = colIdx - 1;
+            const alignment = alignedData.alignments[listIdx];
+            const pair = alignment[rowIdx];
+            
+            if (!pair) return;
+            
+            const otherWord = pair.other || '—';
+            const diffType = detectWordDiffType(mainWord, otherWord);
+            
+            // Находим ячейку с типом (следующая после текста)
+            let typeCell = null;
+            for (let i = 0; i < cells.length; i++) {
+                if (cells[i].classList.contains('verse-text') && parseInt(cells[i].dataset.col) === colIdx) {
+                    typeCell = cells[i + 1];
+                    break;
+                }
+            }
+            
+            if (typeCell) {
+                if (diffType) {
+                    typeCell.innerHTML = `<span style="background: ${getColorForType(diffType)}; padding: 2px 8px; border-radius: 12px; color: white; font-weight: 600;">${getShortLabel(diffType)}</span>`;
+                } else {
+                    typeCell.innerHTML = '✓';
+                }
+            }
+            
+            applyDiffHighlights();
+        }
+        
+        function updateAlignedDataFromTable() {
+            if (!alignedData) return;
+            
+            const rows = document.querySelectorAll('.alignment-table tbody tr');
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                const row = rows[i];
+                if (!row) continue;
+                
+                const cells = row.querySelectorAll('td.verse-text');
+                
+                cells.forEach(cell => {
+                    const colIdx = parseInt(cell.dataset.col);
+                    const newText = cell.textContent.trim();
+                    
+                    if (colIdx === 0) {
+                        alignedData.mainWords[i] = newText;
+                    } else {
+                        const listIdx = colIdx - 1;
+                        if (alignedData.alignments[listIdx] && alignedData.alignments[listIdx][i]) {
+                            alignedData.alignments[listIdx][i].other = newText;
+                        }
+                    }
+                });
+            }
+        }
+
+        // ==================== ОСТАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ====================
+
+        function renderDiffFilters() {
+            let html = '<div class="diff-filters">';
+            html += '<div class="diff-filters-title">🔬 Типы разночтений:</div>';
+            html += '<div class="diff-filters-list">';
+            
+            const filters = [
+                { id: 'graphic', name: 'Графические', color: '#c0392b' },
+                { id: 'phonetic', name: 'Фонетические', color: '#d4a017' },
+                { id: 'morph', name: 'Морфологические', color: '#27ae60' },
+                { id: 'lexical', name: 'Лексические', color: '#8e44ad' },
+                { id: 'syntax', name: 'Синтаксические', color: '#2980b9' }
+            ];
+            
+            filters.forEach(f => {
+                const checked = diffTypesEnabled[f.id] ? 'checked' : '';
+                html += `
+                    <div class="diff-filter-item" onclick="toggleDiffType('${f.id}')">
+                        <input type="checkbox" id="diff_${f.id}" ${checked}>
+                        <span class="color-badge" style="background: ${f.color};"></span>
+                        <label for="diff_${f.id}">${f.name}</label>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            html += '<div style="margin-top: 12px;">';
+            html += '<button class="btn-secondary" onclick="selectAllDiffTypes()" style="padding: 6px 12px; margin-right: 8px;">✓ Выбрать все</button>';
+            html += '<button class="btn-secondary" onclick="deselectAllDiffTypes()" style="padding: 6px 12px;">✗ Снять все</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            return html;
+        }
+        
+        window.toggleDiffType = function(type) {
+            const checkbox = document.getElementById(`diff_${type}`);
+            if (checkbox) {
+                diffTypesEnabled[type] = checkbox.checked;
+                applyDiffHighlights();
+            }
+        };
+        
+        window.selectAllDiffTypes = function() {
+            Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = true);
+            document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = true);
+            applyDiffHighlights();
+        };
+        
+        window.deselectAllDiffTypes = function() {
+            Object.keys(diffTypesEnabled).forEach(key => diffTypesEnabled[key] = false);
+            document.querySelectorAll('.diff-filters-list input').forEach(cb => cb.checked = false);
+            applyDiffHighlights();
+        };
+
+        // Drag & Drop функции
+        let dragSourceIndex = null;
+        
+        function setupDragAndDrop() {
+            const headers = document.querySelectorAll('.alignment-table th.draggable');
+            
+            headers.forEach(th => {
+                th.addEventListener('dragstart', handleDragStart);
+                th.addEventListener('dragend', handleDragEnd);
+                th.addEventListener('dragover', handleDragOver);
+                th.addEventListener('dragenter', handleDragEnter);
+                th.addEventListener('dragleave', handleDragLeave);
+                th.addEventListener('drop', handleDrop);
+            });
+        }
+        
+        function handleDragStart(e) {
+            const th = e.target.closest('th');
+            if (!th) return;
+            
+            dragSourceIndex = parseInt(th.dataset.colPos);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', dragSourceIndex);
+            th.classList.add('dragging');
+        }
+        
+        function handleDragEnd(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('dragging');
+            
+            document.querySelectorAll('.alignment-table th').forEach(h => {
+                h.classList.remove('drag-over');
+            });
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleDragEnter(e) {
+            const th = e.target.closest('th');
+            if (th && th.classList.contains('draggable')) {
+                th.classList.add('drag-over');
+            }
+        }
+        
+        function handleDragLeave(e) {
+            const th = e.target.closest('th');
+            if (th) th.classList.remove('drag-over');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            const targetTh = e.target.closest('th');
+            if (!targetTh) return;
+            
+            targetTh.classList.remove('drag-over');
+            
+            const targetIndex = parseInt(targetTh.dataset.colPos);
+            const sourceIndex = dragSourceIndex;
+            
+            if (sourceIndex === null || sourceIndex === targetIndex) return;
+            
+            const sourceOrderIdx = columnOrder[sourceIndex];
+            const targetOrderIdx = columnOrder[targetIndex];
+            
+            if (sourceOrderIdx === 0 || targetOrderIdx === 0) {
+                alert('Главный список всегда должен быть первым');
+                return;
+            }
+            
+            if (moveColumn(sourceIndex, targetIndex)) {
+                renderWordAlignmentTable();
+            }
+        }
+
+                // ==================== КОНТЕКСТ ПРИ КЛИКЕ ====================
+        
+        // Хранилище исходных текстов для контекста
+        let manuscriptTexts = {};
+        
+        // Сохраняем исходные тексты при парсинге
+        const originalHandleFiles = handleFiles;
+        handleFiles = async function(files) {
+            await originalHandleFiles(files);
+            // Сохраняем текст каждого манускрипта
+            manuscripts.forEach(ms => {
+                manuscriptTexts[ms.name] = ms.data.fullText;
+            });
+        };
+        
+        // Функция получения контекста слова
+        function getWordContext(fullText, word, contextSize = 5) {
+            if (!fullText || !word) return null;
+            
+            const words = fullText.split(/\s+/);
+            const wordIndex = words.findIndex(w => w === word);
+            
+            if (wordIndex === -1) {
+                // Ищем с нормализацией
+                const normalizedWord = normalizeText(word);
+                const normIndex = words.findIndex(w => normalizeText(w) === normalizedWord);
+                if (normIndex === -1) return null;
+                
+                const start = Math.max(0, normIndex - contextSize);
+                const end = Math.min(words.length, normIndex + contextSize + 1);
+                
+                return {
+                    before: words.slice(start, normIndex),
+                    word: words[normIndex],
+                    after: words.slice(normIndex + 1, end),
+                    position: normIndex + 1,
+                    total: words.length
+                };
+            }
+            
+            const start = Math.max(0, wordIndex - contextSize);
+            const end = Math.min(words.length, wordIndex + contextSize + 1);
+            
+            return {
+                before: words.slice(start, wordIndex),
+                word: words[wordIndex],
+                after: words.slice(wordIndex + 1, end),
+                position: wordIndex + 1,
+                total: words.length
+            };
+        }
+        
+        // Показ контекста
+        function showContext(word, manuscriptName) {
+            const fullText = manuscriptTexts[manuscriptName];
+            if (!fullText) {
+                alert('Текст не найден для: ' + manuscriptName);
+                return;
+            }
+            
+            const context = getWordContext(fullText, word);
+            if (!context) {
+                alert('Слово не найдено в тексте');
+                return;
+            }
+            
+            const modal = document.getElementById('contextModal');
+            const title = document.getElementById('contextTitle');
+            const text = document.getElementById('contextText');
+            const source = document.getElementById('contextSource');
+            const position = document.getElementById('contextPosition');
+            
+            title.textContent = `Контекст слова «${word}»`;
+            
+            // Формируем текст с подсветкой
+            const beforeHtml = context.before.map(w => escapeHtml(w)).join(' ');
+            const wordHtml = `<span class="context-word-highlight">${escapeHtml(context.word)}</span>`;
+            const afterHtml = context.after.map(w => escapeHtml(w)).join(' ');
+            
+            text.innerHTML = `${beforeHtml} ${wordHtml} ${afterHtml}`;
+            source.textContent = `📄 ${manuscriptName}`;
+            position.textContent = `Слово ${context.position} из ${context.total}`;
+            
+            modal.classList.add('active');
+        }
+        
+        // Закрытие контекста
+        window.closeContext = function() {
+            document.getElementById('contextModal').classList.remove('active');
+        };
+        
+        // Закрытие по клику вне окна
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('contextModal');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+        
+        // Закрытие по Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.getElementById('contextModal').classList.remove('active');
+            }
+        });
+
+        // Сессии
+        window.saveSession = function() {
+            updateAlignedDataFromTable();
+            const session = {
+                files: uploadedFiles.map(f => f.name),
+                aligned: alignedData,
+                sheets: { start: folioStart.value, end: folioEnd.value },
+                columnVisibility: columnVisibility,
+                columnOrder: columnOrder,
+                diffTypesEnabled: diffTypesEnabled,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('corpusSession', JSON.stringify(session));
+            alert('Сессия сохранена');
+        };
+        
+        window.loadSession = function() {
+            const saved = localStorage.getItem('corpusSession');
+            // Восстанавливаем тексты из загруженных файлов
+            if (session.files) {
+                session.files.forEach(name => {
+                    const ms = manuscripts.find(m => m.name === name);
+                    if (ms) {
+                        manuscriptTexts[ms.name] = ms.data.fullText;
+                    }
+                });
+            }
+            
+            if (saved) {
+                const session = JSON.parse(saved);
+                folioStart.value = session.sheets.start;
+                folioEnd.value = session.sheets.end;
+                if (session.columnVisibility) columnVisibility = session.columnVisibility;
+                if (session.columnOrder) columnOrder = session.columnOrder;
+                if (session.diffTypesEnabled) diffTypesEnabled = session.diffTypesEnabled;
+                alert('Загружена сессия от ' + session.timestamp);
+            } else {
+                alert('Нет сохранённой сессии');
+            }
+        };
+        
+        // Экспорт XML (адаптирован для пословного режима)
+        exportBtn.addEventListener('click', () => {
+            updateAlignedDataFromTable();
+            
+            if (!alignedData) return;
+            
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<TEI>\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>Параллельный корпус: Пословное выравнивание</title>\n      </titleStmt>\n      <sourceDesc>\n        <listWit>\n';
+            xml += '          <witness xml:id="main">' + alignedData.main + '</witness>\n';
+            alignedData.aligned.forEach((name, i) => xml += '          <witness xml:id="wit' + i + '">' + name + '</witness>\n');
+            xml += '        </listWit>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n';
+            
+            for (let i = 0; i < alignedData.mainWords.length; i++) {
+                xml += '      <div type="alignment" n="' + (i+1) + '">\n';
+                xml += '        <seg wit="#main">' + alignedData.mainWords[i] + '</seg>\n';
+                alignedData.alignments.forEach((alignment, idx) => {
+                    const pair = alignment[i] || { other: '—' };
+                    xml += '        <seg wit="#wit' + idx + '">' + (pair.other || '—') + '</seg>\n';
+                });
+                xml += '      </div>\n';
+            }
+            
+            xml += '    </body>\n  </text>\n</TEI>';
+            
+            const blob = new Blob([xml], { type: 'application/xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'word_alignment.xml';
+            a.click();
+        });
     </script>
 </body>
 </html>
