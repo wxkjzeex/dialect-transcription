@@ -743,17 +743,54 @@
             progressDiv.style.display = 'block';
             progressDiv.innerHTML = '⏳ Подготовка текста...';
             
-            const mainMs = manuscripts[mainIndex];
-            const mainText = filterTextBySheets(mainMs.data, folioStart.value, folioEnd.value);
-            const mainWords = mainText.split(/\s+/).filter(w => w.length > 0);
+            // Ключевые слова для поиска начала притчи о блудном сыне
+            const anchorPatterns = [
+                ['рече', 'рече', 'рече'],  // все формы
+                ['господь', 'гь҃', 'г˜ь', 'г҃ь', 'г꙯ь'],
+                ['притъч', 'притьч', 'притъч']  // корень "притч"
+            ];
+            
+            // Функция поиска начала притчи в списке слов
+            function findParableStart(words) {
+                // Ищем последовательность: слово похожее на "рече" + слово похожее на "господь" + слово содержащее "притч"
+                for (let i = 0; i < words.length - 3; i++) {
+                    const w1 = normalizeText(words[i]);
+                    const w2 = normalizeText(words[i+1]);
+                    const w3 = normalizeText(words[i+2]);
+                    
+                    const isReche = w1.includes('реч') || w1 === 'рече' || w1 === 'реч';
+                    const isGospod = w2.includes('г') && (w2.includes('ь') || w2.includes('ъ')) && w2.length <= 4;
+                    const isPritch = w3.includes('прит') || w3.includes('прить');
+                    
+                    if (isReche && isGospod && isPritch) {
+                        console.log(`Найдено начало притчи на позиции ${i}: "${words[i]} ${words[i+1]} ${words[i+2]}"`);
+                        return i;
+                    }
+                }
+                // Если не нашли — берем с начала
+                console.log('Начало притчи не найдено, начинаем с первого слова');
+                return 0;
+            }
+            
+            // Получаем слова главного списка
+            let mainWords = mainMs.data.words;
+            
+            // Находим начало притчи в главном списке
+            const mainStart = findParableStart(mainWords);
+            mainWords = mainWords.slice(mainStart);
+            
+            console.log(`Главный список: начинаем с позиции ${mainStart}, слово "${mainWords[0]}"`);
+            
             const otherMss = manuscripts.filter((_, i) => i !== mainIndex);
             
             progressDiv.innerHTML = '⏳ Множественное выравнивание...';
             
-            // Собираем слова из остальных списков
+            // Собираем слова из остальных списков, тоже с начала притчи
             const otherWordsArray = otherMss.map(ms => {
-                const text = ms.data.fullText;
-                return text.split(/\s+/).filter(w => w.length > 0);
+                let words = ms.data.words;
+                const start = findParableStart(words);
+                console.log(`${ms.name}: начинаем с позиции ${start}, слово "${words[start]}"`);
+                return words.slice(start);
             });
             
             // Множественное выравнивание
@@ -770,11 +807,9 @@
             renderWordAlignmentTable();
             exportBtn.disabled = false;
             
-            // Выводим диагностику
-            console.log('Главных слов изначально:', mainWords.length);
-            console.log('Главных слов после выравнивания:', result.mainWords.length);
-            console.log('Пропусков в главном:', result.mainWords.filter(w => w === '—').length);
-            console.log('Пример первых 20 слов:', result.mainWords.slice(0, 20));
+            console.log('=== РЕЗУЛЬТАТ ===');
+            console.log('Первые 10 слов главного списка:', result.mainWords.slice(0, 10));
+            console.log('Общее количество строк:', result.mainWords.length);
         });
         
         // ============================================================
