@@ -768,6 +768,19 @@
             { name: "Елабуга", displayName: "г. Елабуга", district: "Елабужский", region: "Татарстан", lat: 55.756, lng: 52.054 },
             { name: "Мамадыш", displayName: "с. Мамадыш", district: "Мамадышский", region: "Татарстан", lat: 55.715, lng: 51.412 }
         ];
+
+        // Цвета для каждого ответа
+        const ANSWER_COLORS = {
+            'орать': '#e74c3c',      // красный
+            'пахать': '#3498db',     // синий
+            'кочет': '#e67e22',      // оранжевый
+            'петух': '#2ecc71',      // зелёный
+            'петун': '#27ae60',      // тёмно-зелёный (вариант)
+            'кушак': '#9b59b6',      // фиолетовый
+            'опояска': '#8e44ad',    // тёмно-фиолетовый
+            'сабанить': '#1abc9c',   // бирюзовый
+            'default': '#95a5a6'     // серый для неизвестных
+        };
         
         // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
         let dialectData = [];
@@ -776,6 +789,7 @@
         let currentSearchTerm = '';
         let currentDistrict = 'all';
         let selectedSettlement = null;
+        
         
         // ==================== ИНИЦИАЛИЗАЦИЯ КАРТЫ ====================
         function initMap() {
@@ -830,56 +844,69 @@
                 }
             });
         }
+
+
+        function getAnswerColor(lingUnit) {
+            if (!lingUnit) return ANSWER_COLORS['default'];
+            const lower = lingUnit.toLowerCase().trim();
+            return ANSWER_COLORS[lower] || ANSWER_COLORS['default'];
+        }
+
         
         // ==================== ОТРИСОВКА МАРКЕРОВ ====================
         function renderMarkers() {
             markersLayer.clearLayers();
-
+        
             settlements.forEach(settlement => {
                 // Фильтр по району
                 if (currentDistrict !== 'all' && settlement.district !== currentDistrict) {
                     return;
                 }
-
-                // Фильтр по региону (используем поле region из координат)
+                // Фильтр по региону
                 if (currentRegion !== 'all' && settlement.region !== currentRegion) {
                     return;
                 }
-
-                // Проверяем поиск по лексеме
-                let isSearchMatch = true;
+        
+                const settlementRecords = dialectData.filter(r => r.settlement === settlement.name);
+        
+                // Поиск по лексеме
                 if (currentSearchTerm) {
-                    const settlementRecords = dialectData.filter(r => r.settlement === settlement.name);
-                    isSearchMatch = settlementRecords.some(rec =>
+                    const hasMatch = settlementRecords.some(rec =>
                         (rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().includes(currentSearchTerm)) ||
                         (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().includes(currentSearchTerm))
                     );
-                    if (!isSearchMatch) return;
+                    if (!hasMatch) return;
                 }
-
-                // Проверяем поиск по вопросам
+        
+                // Поиск по вопросам
                 if (currentQuestionSearch) {
-                    const settlementRecords = dialectData.filter(r => r.settlement === settlement.name);
                     const hasQuestion = settlementRecords.some(rec =>
                         rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)
                     );
                     if (!hasQuestion) return;
                 }
-
+        
                 // Определяем цвет маркера
-                let fillColor = '#3498db';
+                let fillColor = '#3498db'; // обычный цвет
                 let radius = 8;
-
-                if (currentSearchTerm) {
-                    fillColor = '#ffc107';
-                    radius = 11;
+        
+                // Если выбран вопрос — показываем цвет ответа
+                if (currentQuestionSearch && settlementRecords.length > 0) {
+                    const relevantRecord = settlementRecords.find(rec =>
+                        rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)
+                    );
+                    if (relevantRecord) {
+                        fillColor = getAnswerColor(relevantRecord.ling_unit_1);
+                        radius = 10;
+                    }
                 }
-
+        
+                // Если выбран населённый пункт
                 if (selectedSettlement === settlement.name) {
                     fillColor = '#e74c3c';
                     radius = 11;
                 }
-
+        
                 const marker = L.circleMarker([settlement.lat, settlement.lng], {
                     radius: radius,
                     fillColor: fillColor,
@@ -888,24 +915,25 @@
                     opacity: 1,
                     fillOpacity: 0.85
                 });
-
+        
                 const records = dialectData.filter(r => r.settlement === settlement.name);
                 const uniqueWords = [...new Set(records.map(r => r.ling_unit_1).filter(Boolean))].slice(0, 3);
-
+        
                 marker.bindPopup(`
                     <b>${settlement.displayName || settlement.name}</b><br>
                     <i>${settlement.district} район</i><br>
                     ${uniqueWords.length ? '<small>Лексемы: ' + uniqueWords.join(', ') + '</small>' : '<small>Нет данных</small>'}
                     <br><button onclick="selectSettlement('${settlement.name}')" style="margin-top:8px; padding:4px 12px; background:#3498db; color:white; border:none; border-radius:4px; cursor:pointer; width:100%;">📖 Показать анкету</button>
                 `);
-
+        
                 marker.on('click', () => selectSettlement(settlement.name));
                 marker.addTo(markersLayer);
             });
-
-            updateSearchStats();
-        }
         
+            updateSearchStats();
+            updateQuestionSearchStats();
+        }
+       
         
         
         // ==================== ФИЛЬТРЫ ПО РАЙОНАМ ====================
@@ -972,6 +1000,7 @@
         }
 
                 // ==================== ИЗОГЛОССЫ ====================
+        let activeIsoglossGroup = null;
         let isoglossLayers = {
             orat: null,
             pahat: null,
@@ -1150,6 +1179,13 @@
         }
 
         window.toggleIsogloss = function (type) {
+                // Проверяем, что вопрос выбран и изоглосса соответствует
+            if (!currentQuestionSearch) {
+                alert('Сначала выберите вопрос ЛАРНГ');
+                document.getElementById(`chk${type.charAt(0).toUpperCase() + type.slice(1)}`).checked = false;
+                return;
+            }
+            
             if (!isoglossLayers[type]) {
                 isoglossLayers[type] = drawIsogloss(type);
             }
@@ -1163,14 +1199,59 @@
         };
 
         function initIsoglosses() {
-            // Включаем все изоглоссы по умолчанию
-            setTimeout(() => {
-                toggleIsogloss('orat');
-                toggleIsogloss('pahat');
-                toggleIsogloss('kochet');
-                toggleIsogloss('petuh');
-                toggleIsogloss('kushak');
-            }, 500);
+            // Изоглоссы не рисуем при загрузке, только когда выбран вопрос
+            // Оставляем пустую инициализацию
+            document.querySelectorAll('.isogloss-item input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+        }
+
+        function updateIsoglossVisibility() {
+            // Удаляем все существующие изоглоссы
+            Object.keys(isoglossLayers).forEach(key => {
+                if (isoglossLayers[key]) {
+                    map.removeLayer(isoglossLayers[key]);
+                }
+            });
+        
+            // Если нет активного вопроса — изоглоссы не показываем
+            if (!currentQuestionSearch) {
+                // Снимаем галочки в интерфейсе
+                document.querySelectorAll('.isogloss-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+                return;
+            }
+        
+            // Определяем группу изоглосс по вопросу
+            let group = null;
+            if (currentQuestionSearch.includes('пахать')) {
+                group = ['orat', 'pahat'];
+            } else if (currentQuestionSearch.includes('петух')) {
+                group = ['kochet', 'petuh'];
+            } else if (currentQuestionSearch.includes('пояс')) {
+                group = ['kushak'];
+            }
+        
+            // Обновляем галочки в UI
+            document.querySelectorAll('.isogloss-item input[type="checkbox"]').forEach(cb => {
+                const type = cb.id.replace('chk', '').toLowerCase();
+                if (group && group.includes(type)) {
+                    cb.checked = true;
+                } else {
+                    cb.checked = false;
+                }
+            });
+        
+            // Рисуем изоглоссы для группы
+            if (group) {
+                group.forEach(type => {
+                    if (!isoglossLayers[type] || !map.hasLayer(isoglossLayers[type])) {
+                        isoglossLayers[type] = drawIsogloss(type);
+                        isoglossLayers[type].addTo(map);
+                    } else {
+                        isoglossLayers[type].addTo(map);
+                    }
+                });
+            }
         }
 
         // ==================== ФИЛЬТР ПО РЕГИОНАМ ====================
@@ -1195,19 +1276,21 @@
             const select = document.getElementById('questionSearch');
             const term = select.value.trim().toLowerCase();
             currentQuestionSearch = term;
-
+        
             if (!term) {
                 document.getElementById('questionSearchStats').style.display = 'none';
             }
-
+        
+            updateIsoglossVisibility(); // ← важно
             renderMarkers();
             updateQuestionSearchStats();
         }
-
+        
         function resetQuestionSearch() {
             document.getElementById('questionSearch').value = '';
             currentQuestionSearch = '';
             document.getElementById('questionSearchStats').style.display = 'none';
+            updateIsoglossVisibility();
             renderMarkers();
         }
 
@@ -1259,13 +1342,9 @@
         window.selectSettlement = function (settlementName) {
             selectedSettlement = settlementName;
             const settlement = settlements.find(s => s.name === settlementName);
-
-            // Регион берем из координат (если есть) или из данных
             const region = settlement.region || (dialectData.find(r => r.settlement === settlementName)?.region) || '—';
-
-            // Обновляем карточку
             const records = dialectData.filter(r => r.settlement === settlementName);
-
+        
             document.getElementById('settlementCard').innerHTML = `
                 <div class="settlement-name">${settlement.displayName || settlement.name}</div>
                 <div class="settlement-district">${settlement.district} район</div>
@@ -1279,37 +1358,41 @@
                     <span id="saveStatus" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
                 </div>
             `;
-
+        
             // Обновляем таблицу
             const tbody = document.getElementById('answersBody');
-
+        
             if (records.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state">📭 Нет данных по этому пункту</div></td></tr>';
             } else {
-                // Фильтруем по поиску вопроса, если есть
                 let displayRecords = records;
                 if (currentQuestionSearch) {
                     displayRecords = records.filter(rec =>
                         rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)
                     );
                 }
-
+        
                 if (displayRecords.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state">🔍 Нет вопросов по запросу</div></td></tr>';
                 } else {
-                    tbody.innerHTML = displayRecords.map(rec => `
-                        <tr>
-                            <td><span class="question-code">${rec.question_code || '—'}</span></td>
-                            <td>${rec.question_text || '—'}</td>
-                            <td>
-                                <span class="ling-unit">${rec.ling_unit_1 || '—'}</span>
-                                ${rec.ling_unit_2 ? '<br><span style="color:#95a5a6; font-size:12px;">' + rec.ling_unit_2 + '</span>' : ''}
-                            </td>
-                        </tr>
-                    `).join('');
+                    tbody.innerHTML = displayRecords.map(rec => {
+                        const color1 = getAnswerColor(rec.ling_unit_1);
+                        const color2 = rec.ling_unit_2 ? getAnswerColor(rec.ling_unit_2) : null;
+                        return `
+                            <tr>
+                                <td><span class="question-code">${rec.question_code || '—'}</span></td>
+                                <td>${rec.question_text || '—'}</td>
+                                <td>
+                                    <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${color1}; margin-right:4px; border:1px solid #fff; box-shadow:0 0 0 1px #ccc;"></span>
+                                    <span class="ling-unit">${rec.ling_unit_1 || '—'}</span>
+                                    ${rec.ling_unit_2 ? '<br><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:'+color2+'; margin-right:4px; border:1px solid #fff; box-shadow:0 0 0 1px #ccc; margin-left:4px;"></span><span style="color:#95a5a6; font-size:12px;">' + rec.ling_unit_2 + '</span>' : ''}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
                 }
             }
-
+        
             renderMarkers();
         };
 
