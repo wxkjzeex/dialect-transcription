@@ -761,8 +761,8 @@
             'пояс': [[56.2, 50.9], [55.8, 51.4], [55.4, 51.9], [55.2, 52.3]]
         };
 
-        // Цвета изоглосс
-        const isoglossColors = {
+        // Цвета для лексем (контрастные пары)
+        const LEXEME_COLORS = {
             'орать': '#e74c3c',
             'пахать': '#2980b9',
             'сабанить': '#f39c12',
@@ -774,6 +774,77 @@
             'ремень': '#2c3e50',
             'пояс': '#d35400'
         };
+
+                // Алгоритм выпуклой оболочки (Graham Scan)
+        function convexHull(points) {
+            if (points.length < 3) return points;
+            
+            // Находим самую левую точку
+            let start = points[0];
+            for (let p of points) {
+                if (p[0] < start[0] || (p[0] === start[0] && p[1] < start[1])) {
+                    start = p;
+                }
+            }
+            
+            // Сортируем по полярному углу
+            const sorted = points.filter(p => p !== start).sort((a, b) => {
+                const angleA = Math.atan2(a[1] - start[1], a[0] - start[0]);
+                const angleB = Math.atan2(b[1] - start[1], b[0] - start[0]);
+                return angleA - angleB;
+            });
+            
+            const hull = [start];
+            for (let p of sorted) {
+                while (hull.length >= 2) {
+                    const a = hull[hull.length - 2];
+                    const b = hull[hull.length - 1];
+                    const cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+                    if (cross <= 0) {
+                        hull.pop();
+                    } else {
+                        break;
+                    }
+                }
+                hull.push(p);
+            }
+            
+            return hull;
+        }
+
+                // Расширение полигона (буфер)
+        function bufferPolygon(polygon, distanceKm) {
+            if (polygon.length < 3) return polygon;
+            
+            // Находим центр полигона
+            let centerLat = 0, centerLng = 0;
+            polygon.forEach(([lat, lng]) => {
+                centerLat += lat;
+                centerLng += lng;
+            });
+            centerLat /= polygon.length;
+            centerLng /= polygon.length;
+            
+            // Коэффициент перевода км в градусы (приблизительно)
+            const kmPerDegreeLat = 111.32;
+            const kmPerDegreeLng = 111.32 * Math.cos(centerLat * Math.PI / 180);
+            
+            const bufferLat = distanceKm / kmPerDegreeLat;
+            const bufferLng = distanceKm / kmPerDegreeLng;
+            
+            // Расширяем каждую точку от центра
+            return polygon.map(([lat, lng]) => {
+                const dLat = lat - centerLat;
+                const dLng = lng - centerLng;
+                const dist = Math.sqrt(dLat * dLat + dLng * dLng) || 1;
+                const scale = 1 + (bufferLat / dist);
+                return [
+                    centerLat + dLat * scale,
+                    centerLng + dLng * scale
+                ];
+            });
+        }
+
         
         // ==================== ИНИЦИАЛИЗАЦИЯ КАРТЫ ====================
         function initMap() {
@@ -1232,19 +1303,15 @@
                 // Вычисление центра полигона
         // ==================== ИЗОГЛОССЫ ====================
         
+        // Получение центра полигона
         function getPolygonCenter(coords) {
             if (!coords || coords.length === 0) return null;
-            
-            let sumLat = 0;
-            let sumLng = 0;
-            const count = coords.length;
-            
+            let sumLat = 0, sumLng = 0;
             coords.forEach(([lat, lng]) => {
                 sumLat += lat;
                 sumLng += lng;
             });
-            
-            return [sumLat / count, sumLng / count];
+            return [sumLat / coords.length, sumLng / coords.length];
         }
 
         function drawIsogloss(type) {
@@ -1310,9 +1377,144 @@
 
             return layerGroup;
         }
+
+                // Строим ареал для конкретной лексемы
+        function buildAreaForLexeme(lexeme) {
+            const color = LEXEME_COLORS[lexeme] || getAnswerColor(lexeme);
+            const layerGroup = L.layerGroup();
+            
+            // Собираем все точки с этой лексемой
+            const points = [];
+            const seen = new Set();
+            
+            dialectData.forEach(rec => {
+                const match1 = rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().trim() === lexeme;
+                const match2 = rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().trim() === lexeme;
+                
+                if (match1 || match2) {
+                    const settlement = settlements.find(s => s.name === rec.settlement);
+                    if (settlement && !seen.has(settlement.name)) {
+                        seen.add(settlement.name);
+                        points.push([settlement.lat, settlement.lng]);
+                    }
+                }
+            });
+            
+            console.log(`  📍 "${lexeme}": найдено ${points.length} точек`);
+            
+            if (points.length === 0) {
+                // Нет точек — не рисуем ареал
+                return layerGroup;
+            }
+            
+            if (points.length === 1) {
+                // Одна точка — рисуем круг радиусом ~20 км
+                const circle = L.circle(points[0], {
+                    radius: 20000, // 20 км в метрах
+                    color: color,
+                    weight: 1.5,
+                    opacity: 0.5,
+                    fillOpacity: 0.12,
+                    fillColor: color
+                }).bindPopup(`<b>Ареал "${lexeme}"</b><br><small>1 населённый пункт</small>`);
+                circle.addTo(layerGroup);
+                
+                // Подпись
+                const label = L.marker(points[0], {
+                    icon: L.divIcon({
+                        className: 'area-label',
+                        html: `<div style="background:${color}E6; color:white; padding:5px 14px; border-radius:16px; font-size:13px; font-weight:600; white-space:nowrap; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.25); border:2px solid white; letter-spacing:0.3px; line-height:1.4;">${lexeme}</div>`,
+                        iconSize: [lexeme.length * 14 + 28, 28],
+                        iconAnchor: [Math.floor((lexeme.length * 14 + 28) / 2), 14]
+                    }),
+                    interactive: false
+                });
+                label.addTo(layerGroup);
+                
+                return layerGroup;
+            }
+            
+            if (points.length === 2) {
+                // Две точки — рисуем линию между ними и буфер
+                const polyline = L.polyline(points, {
+                    color: color,
+                    weight: 1.5,
+                    opacity: 0.4,
+                    dashArray: '4, 4'
+                });
+                polyline.addTo(layerGroup);
+                
+                // Буфер вокруг двух точек
+                const buffered = bufferPolygon(points, 15);
+                L.polygon(buffered, {
+                    color: color,
+                    weight: 1.5,
+                    opacity: 0.5,
+                    fillOpacity: 0.12,
+                    fillColor: color
+                }).bindPopup(`<b>Ареал "${lexeme}"</b><br><small>2 населённых пункта</small>`).addTo(layerGroup);
+                
+                // Подпись посередине
+                const center = [
+                    (points[0][0] + points[1][0]) / 2,
+                    (points[0][1] + points[1][1]) / 2
+                ];
+                const label = L.marker(center, {
+                    icon: L.divIcon({
+                        className: 'area-label',
+                        html: `<div style="background:${color}E6; color:white; padding:5px 14px; border-radius:16px; font-size:13px; font-weight:600; white-space:nowrap; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.25); border:2px solid white; letter-spacing:0.3px; line-height:1.4;">${lexeme}</div>`,
+                        iconSize: [lexeme.length * 14 + 28, 28],
+                        iconAnchor: [Math.floor((lexeme.length * 14 + 28) / 2), 14]
+                    }),
+                    interactive: false
+                });
+                label.addTo(layerGroup);
+                
+                return layerGroup;
+            }
+            
+            // 3+ точек — строим выпуклую оболочку с буфером
+            const hull = convexHull(points);
+            const buffered = bufferPolygon(hull, 12); // буфер ~12 км
+            
+            // Заливка ареала
+            L.polygon(buffered, {
+                color: color,
+                weight: 2,
+                opacity: 0.6,
+                fillOpacity: 0.15,
+                fillColor: color
+            }).bindPopup(`<b>Ареал "${lexeme}"</b><br><small>${points.length} нас. пунктов</small>`).addTo(layerGroup);
+            
+            // Граница (выпуклая оболочка)
+            L.polyline([...hull, hull[0]], {
+                color: color,
+                weight: 2.5,
+                opacity: 0.7,
+                dashArray: '8, 6'
+            }).addTo(layerGroup);
+            
+            // Подпись в центре ареала
+            const center = getPolygonCenter(buffered);
+            if (center) {
+                const label = L.marker(center, {
+                    icon: L.divIcon({
+                        className: 'area-label',
+                        html: `<div style="background:${color}E6; color:white; padding:5px 14px; border-radius:16px; font-size:13px; font-weight:600; white-space:nowrap; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.25); border:2px solid white; letter-spacing:0.3px; line-height:1.4;">${lexeme}</div>`,
+                        iconSize: [lexeme.length * 14 + 28, 28],
+                        iconAnchor: [Math.floor((lexeme.length * 14 + 28) / 2), 14]
+                    }),
+                    interactive: false
+                });
+                label.addTo(layerGroup);
+            }
+            
+            return layerGroup;
+        }
         
+        // Обновление видимости изоглосс (теперь на основе данных)
         function updateIsoglossVisibility() {
-            // Удаляем все существующие изоглоссы
+            // Удаляем старые слои
             Object.keys(isoglossLayers).forEach(key => {
                 if (isoglossLayers[key]) {
                     map.removeLayer(isoglossLayers[key]);
@@ -1322,41 +1524,40 @@
 
             if (!currentQuestionSearch) return;
 
-            // Определяем группу изоглосс по вопросу — собираем ВСЕ варианты из данных
-            const activeTypes = new Set();
+            // Собираем все уникальные лексемы для выбранного вопроса
+            const activeLexemes = new Set();
             
             dialectData.forEach(rec => {
                 if (rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)) {
-                    if (rec.ling_unit_1) {
-                        const key = rec.ling_unit_1.toLowerCase().trim();
-                        if (isoglossPolygons[key]) activeTypes.add(key);
-                    }
-                    if (rec.ling_unit_2) {
-                        const key = rec.ling_unit_2.toLowerCase().trim();
-                        if (isoglossPolygons[key]) activeTypes.add(key);
-                    }
+                    if (rec.ling_unit_1) activeLexemes.add(rec.ling_unit_1.toLowerCase().trim());
+                    if (rec.ling_unit_2) activeLexemes.add(rec.ling_unit_2.toLowerCase().trim());
                 }
             });
 
-            console.log(`🗺️ Ареалы для вопроса "${currentQuestionSearch}":`, Array.from(activeTypes));
+            console.log(`🗺️ Строим ареалы для "${currentQuestionSearch}": ${Array.from(activeLexemes).join(', ')}`);
 
-            // Рисуем все нужные ареалы
-            activeTypes.forEach(type => {
-                isoglossLayers[type] = drawIsogloss(type);
-                isoglossLayers[type].addTo(map);
+            // Строим ареал для каждой лексемы
+            activeLexemes.forEach(lexeme => {
+                isoglossLayers[lexeme] = buildAreaForLexeme(lexeme);
+                isoglossLayers[lexeme].addTo(map);
             });
 
             // Подгоняем карту под все ареалы
-            if (activeTypes.size > 0) {
+            if (activeLexemes.size > 0) {
                 const allCoords = [];
-                activeTypes.forEach(type => {
-                    if (isoglossPolygons[type]) {
-                        allCoords.push(...isoglossPolygons[type]);
-                    }
+                activeLexemes.forEach(lexeme => {
+                    dialectData.forEach(rec => {
+                        const match = (rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().trim() === lexeme) ||
+                                     (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().trim() === lexeme);
+                        if (match && rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)) {
+                            const s = settlements.find(s => s.name === rec.settlement);
+                            if (s) allCoords.push([s.lat, s.lng]);
+                        }
+                    });
                 });
                 if (allCoords.length > 0) {
                     const bounds = L.latLngBounds(allCoords);
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 9 });
+                    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 9 });
                 }
             }
         }
