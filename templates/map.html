@@ -606,7 +606,8 @@
         // ==================== КОНФИГУРАЦИЯ ====================
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTxAnAl8nY0SPxtmas14sGCCeRlLbR-4-pG91HC82rwSPpLIgCxSJVj0ePNI_K7sulRBa8SUl3e4Tgc/pub?output=csv';
         
-        const settlements = [
+        // Базовые координаты
+        const baseSettlements = [
             { name: "Яр", displayName: "с. Яр", district: "Ярский", region: "Удмуртия", lat: 58.246, lng: 52.102 },
             { name: "Елово", displayName: "д. Елово", district: "Ярский", region: "Удмуртия", lat: 58.312, lng: 52.211 },
             { name: "Малая Пурга", displayName: "с. Малая Пурга", district: "Малопургинский", region: "Удмуртия", lat: 56.558, lng: 53.009 },
@@ -632,26 +633,46 @@
             { name: "Мамадыш", displayName: "с. Мамадыш", district: "Мамадышский", region: "Татарстан", lat: 55.715, lng: 51.412 }
         ];
         
-        // ==================== ЦВЕТОВАЯ СХЕМА ОТВЕТОВ ====================
-        const ANSWER_COLORS = {
-            'орать': '#e74c3c',      // красный
-            'пахать': '#3498db',     // синий
+        // Рабочий массив (будет пополняться из localStorage)
+        let settlements = [...baseSettlements];
+        
+        // ==================== ЦВЕТОВАЯ СХЕМА ОТВЕТОВ (контрастные цвета) ====================
+        // Для каждой группы вопросов — свои хорошо различимые цвета
+        const QUESTION_COLOR_MAP = {
+            // Глагол "пахать"
+            'орать': '#e74c3c',      // ярко-красный
+            'пахать': '#2980b9',     // насыщенный синий
+            'сабанить': '#f39c12',   // оранжево-желтый
+            // Петух
             'кочет': '#e67e22',      // оранжевый
-            'петух': '#2ecc71',      // зелёный
-            'петун': '#27ae60',      // тёмно-зелёный
-            'кушак': '#9b59b6',      // фиолетовый
-            'опояска': '#8e44ad',    // тёмно-фиолетовый
-            'сабанить': '#1abc9c',   // бирюзовый
+            'петух': '#27ae60',      // зеленый
+            'петун': '#8e44ad',      // фиолетовый (вместо тёмно-зелёного)
+            // Пояс
+            'кушак': '#9b59b6',      // пурпурный
+            'опояска': '#1abc9c',    // бирюзовый
+            'ремень': '#2c3e50',     // тёмно-синий
+            'пояс': '#d35400',       // тёмно-оранжевый
+            // Дефолт
             'default': '#95a5a6'     // серый
         };
 
-        // Цвет выделенной точки (золотой)
+        // Цвет выделенной точки (золотой — не пересекается с цветами ответов)
         const SELECTED_COLOR = '#f1c40f';
 
         function getAnswerColor(lingUnit) {
-            if (!lingUnit) return ANSWER_COLORS['default'];
+            if (!lingUnit) return QUESTION_COLOR_MAP['default'];
             const lower = lingUnit.toLowerCase().trim();
-            return ANSWER_COLORS[lower] || ANSWER_COLORS['default'];
+            return QUESTION_COLOR_MAP[lower] || generateColorFromString(lower);
+        }
+
+        // Генерация стабильного цвета для неизвестных лексем
+        function generateColorFromString(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash % 360);
+            return `hsl(${h}, 65%, 45%)`;
         }
         
         // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
@@ -711,9 +732,9 @@
 
         const isoglossColors = {
             orat: '#e74c3c',
-            pahat: '#3498db',
+            pahat: '#2980b9',
             kochet: '#e67e22',
-            petuh: '#2ecc71',
+            petuh: '#27ae60',
             kushak: '#9b59b6'
         };
 
@@ -749,7 +770,11 @@
                 skipEmptyLines: true,
                 complete: function (results) {
                     dialectData = results.data.filter(row => row.settlement && row.region);
-                    console.log(`Загружено ${dialectData.length} записей из Google Sheets`);
+                    console.log(`📊 Загружено ${dialectData.length} записей из Google Sheets`);
+                    
+                    // Загружаем локально сохранённые данные
+                    loadLocalData();
+                    
                     initDistrictFilters();
                     renderMarkers();
                 },
@@ -768,10 +793,108 @@
                         { region: "Кировская обл.", district: "Фалёнский", settlement: "пгт Фалёнки", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "орать", ling_unit_2: "" },
                         { region: "Татарстан", district: "Агрызский", settlement: "с. Красный Бор", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "пахать", ling_unit_2: "сабанить" }
                     ];
+                    loadLocalData();
                     initDistrictFilters();
                     renderMarkers();
                 }
             });
+        }
+
+        // ==================== ЗАГРУЗКА ЛОКАЛЬНЫХ ДАННЫХ ====================
+        function loadLocalData() {
+            const key = 'dialectUserAdditions';
+            const saved = localStorage.getItem(key);
+            if (!saved) {
+                console.log('📭 Нет локально сохранённых данных');
+                return;
+            }
+            
+            const userRecords = JSON.parse(saved);
+            console.log(`💾 Загружено ${userRecords.length} локальных записей`);
+            
+            // Собираем уникальные населенные пункты из локальных данных
+            const localSettlementsMap = new Map();
+            
+            userRecords.forEach(rec => {
+                // Добавляем запись в dialectData, если её ещё нет
+                const exists = dialectData.find(d => 
+                    d.settlement === rec.settlement && 
+                    d.question_code === rec.question_code &&
+                    d.ling_unit_1 === rec.ling_unit_1
+                );
+                
+                if (!exists) {
+                    dialectData.push(rec);
+                    console.log(`  ➕ Добавлена запись: ${rec.settlement} — ${rec.question_code} — ${rec.ling_unit_1}`);
+                }
+                
+                // Группируем по населенным пунктам
+                if (!localSettlementsMap.has(rec.settlement)) {
+                    localSettlementsMap.set(rec.settlement, {
+                        name: rec.settlement,
+                        district: rec.district,
+                        region: rec.region,
+                        lat: rec.lat,
+                        lng: rec.lng
+                    });
+                }
+            });
+            
+            // Добавляем новые населённые пункты в settlements
+            localSettlementsMap.forEach((settData, settlementName) => {
+                if (!settlements.find(s => s.name === settlementName)) {
+                    const displayName = settlementName.includes('.') || 
+                                        settlementName.includes('г.') || 
+                                        settlementName.includes('с.') || 
+                                        settlementName.includes('д.') || 
+                                        settlementName.includes('пгт') 
+                        ? settlementName 
+                        : `с. ${settlementName}`;
+                    
+                    // Проверяем наличие координат
+                    if (settData.lat && settData.lng) {
+                        settlements.push({
+                            name: settlementName,
+                            displayName: displayName,
+                            district: settData.district,
+                            region: settData.region,
+                            lat: settData.lat,
+                            lng: settData.lng
+                        });
+                        console.log(`  📍 Добавлен нас. пункт: ${settlementName} (${settData.lat}, ${settData.lng})`);
+                    } else {
+                        console.warn(`  ⚠️ Нет координат для: ${settlementName}, пробуем геокодировать...`);
+                        // Геокодируем асинхронно
+                        geocodeAndAddSettlement(settlementName, settData.region, settData.district);
+                    }
+                }
+            });
+        }
+
+        // Асинхронное геокодирование для локальных пунктов без координат
+        async function geocodeAndAddSettlement(name, region, district) {
+            const coords = await geocodeSettlement(name, region, district);
+            if (coords) {
+                const displayName = name.includes('.') || name.includes('г.') || name.includes('с.') || name.includes('д.') || name.includes('пгт') 
+                    ? name 
+                    : `с. ${name}`;
+                
+                if (!settlements.find(s => s.name === name)) {
+                    settlements.push({
+                        name: name,
+                        displayName: displayName,
+                        district: district,
+                        region: region,
+                        lat: coords.lat,
+                        lng: coords.lng
+                    });
+                    console.log(`  ✅ Геокодирован: ${name} (${coords.lat}, ${coords.lng})`);
+                    initDistrictFilters();
+                    renderMarkers();
+                }
+            } else {
+                console.warn(`  ❌ Не удалось геокодировать: ${name}`);
+            }
         }
         
         // ==================== ОТРИСОВКА МАРКЕРОВ ====================
@@ -839,7 +962,7 @@
                         addMarkerPopup(marker, settlement, settlementRecords);
                         marker.addTo(markersLayer);
                     } else if (answersArray.length >= 2) {
-                        // Несколько ответов — создаём кастомный маркер с секторами
+                        // Несколько ответов — кастомный маркер с секторами
                         const marker = createPieMarker(
                             settlement.lat, 
                             settlement.lng, 
@@ -869,7 +992,6 @@
             updateLegend();
         }
 
-        // Вспомогательная функция для добавления попапа
         function addMarkerPopup(marker, settlement, records) {
             const uniqueWords = [...new Set(records.map(r => r.ling_unit_1).filter(Boolean))].slice(0, 3);
             marker.bindPopup(`
@@ -893,7 +1015,6 @@
             const centerY = size / 2;
             const radius = size / 2 - 2;
             
-            // Рисуем сектора
             const sliceAngle = (2 * Math.PI) / count;
             colors.forEach((color, i) => {
                 ctx.beginPath();
@@ -907,7 +1028,6 @@
                 ctx.stroke();
             });
             
-            // Белая обводка
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#ffffff';
@@ -924,39 +1044,50 @@
             });
         }
         
-        // ==================== ОБНОВЛЕНИЕ ЛЕГЕНДЫ ====================
+        // ==================== ОБНОВЛЕНИЕ ЛЕГЕНДЫ (динамическое) ====================
         function updateLegend() {
             const legendDiv = document.getElementById('questionLegend');
             
-            if (currentQuestionSearch) {
-                // Определяем группу для легенды
-                let groupColors = {};
-                let groupName = '';
-                
-                if (currentQuestionSearch.includes('пахать')) {
-                    groupColors = { 'орать': ANSWER_COLORS['орать'], 'пахать': ANSWER_COLORS['пахать'] };
-                    groupName = '🌾 Глагол "пахать"';
-                } else if (currentQuestionSearch.includes('Петух') || currentQuestionSearch.includes('петух')) {
-                    groupColors = { 'кочет': ANSWER_COLORS['кочет'], 'петух': ANSWER_COLORS['петух'], 'петун': ANSWER_COLORS['петун'] };
-                    groupName = '🐓 Петух';
-                } else if (currentQuestionSearch.includes('Пояс') || currentQuestionSearch.includes('пояс')) {
-                    groupColors = { 'кушак': ANSWER_COLORS['кушак'], 'опояска': ANSWER_COLORS['опояска'] };
-                    groupName = '👔 Пояс';
-                }
-                
-                let html = `<div style="font-weight:600; margin-bottom:6px;">${groupName}</div>`;
-                Object.entries(groupColors).forEach(([word, color]) => {
-                    html += `
-                        <div class="legend-item">
-                            <span class="legend-color" style="background:${color};"></span>
-                            "${word}"
-                        </div>
-                    `;
-                });
-                legendDiv.innerHTML = html;
-            } else {
+            if (!currentQuestionSearch) {
                 legendDiv.innerHTML = '<em>Выберите вопрос для отображения ареалов</em>';
+                return;
             }
+
+            // Собираем ВСЕ уникальные лексемы для выбранного вопроса из данных
+            const allAnswers = new Set();
+            dialectData.forEach(rec => {
+                if (rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)) {
+                    if (rec.ling_unit_1) allAnswers.add(rec.ling_unit_1.toLowerCase().trim());
+                    if (rec.ling_unit_2) allAnswers.add(rec.ling_unit_2.toLowerCase().trim());
+                }
+            });
+
+            // Определяем название группы
+            let groupName = '';
+            if (currentQuestionSearch.includes('пахать')) groupName = '🌾 Глагол "пахать"';
+            else if (currentQuestionSearch.includes('Петух') || currentQuestionSearch.includes('петух')) groupName = '🐓 Петух';
+            else if (currentQuestionSearch.includes('Пояс') || currentQuestionSearch.includes('пояс')) groupName = '👔 Пояс';
+            else groupName = '📋 ' + currentQuestionSearch;
+
+            // Сортируем для стабильности
+            const sortedAnswers = Array.from(allAnswers).sort();
+            
+            if (sortedAnswers.length === 0) {
+                legendDiv.innerHTML = '<em>Нет данных по выбранному вопросу</em>';
+                return;
+            }
+
+            let html = `<div style="font-weight:600; margin-bottom:8px;">${groupName}</div>`;
+            sortedAnswers.forEach(word => {
+                const color = getAnswerColor(word);
+                html += `
+                    <div class="legend-item" style="margin-bottom:4px;">
+                        <span class="legend-color" style="background:${color};"></span>
+                        "${word}"
+                    </div>
+                `;
+            });
+            legendDiv.innerHTML = html;
         }
         
         // ==================== ФИЛЬТРЫ ПО РАЙОНАМ ====================
@@ -1143,12 +1274,15 @@
         window.selectSettlement = function (settlementName) {
             selectedSettlement = settlementName;
             const settlement = settlements.find(s => s.name === settlementName);
-            const region = settlement.region || (dialectData.find(r => r.settlement === settlementName)?.region) || '—';
+            const region = settlement ? settlement.region : (dialectData.find(r => r.settlement === settlementName)?.region) || '—';
             const records = dialectData.filter(r => r.settlement === settlementName);
 
+            const displayName = settlement ? (settlement.displayName || settlement.name) : settlementName;
+            const district = settlement ? settlement.district : (records[0]?.district || '—');
+
             document.getElementById('settlementCard').innerHTML = `
-                <div class="settlement-name">${settlement.displayName || settlement.name}</div>
-                <div class="settlement-district">${settlement.district} район</div>
+                <div class="settlement-name">${displayName}</div>
+                <div class="settlement-district">${district} район</div>
                 <div id="settlementRegion" style="font-size:12px; color:#7f8c8d; margin-top:4px;">Регион: ${region}</div>
                 <span class="badge" id="answersCount">${records.length} ответов</span>
                 <div class="comments-section">
@@ -1307,14 +1441,37 @@
             
             const displayName = name.includes('.') || name.includes('г.') || name.includes('с.') || name.includes('д.') || name.includes('пгт') ? name : `с. ${name}`;
             
-            settlements.push({ name, displayName, district, region, lat: coords.lat, lng: coords.lng });
+            // Добавляем в settlements
+            settlements.push({ 
+                name, 
+                displayName, 
+                district, 
+                region, 
+                lat: coords.lat, 
+                lng: coords.lng 
+            });
             
-            const newRecord = { region, district, settlement: name, question_code: questionCode, question_text: questionText, ling_unit_1: lingUnit1, ling_unit_2: lingUnit2 || '' };
+            // Добавляем запись в dialectData
+            const newRecord = { 
+                region, 
+                district, 
+                settlement: name, 
+                question_code: questionCode, 
+                question_text: questionText, 
+                ling_unit_1: lingUnit1, 
+                ling_unit_2: lingUnit2 || '',
+                lat: coords.lat,
+                lng: coords.lng
+            };
             dialectData.push(newRecord);
             
-            statusEl.textContent = '✅ Пункт успешно добавлен!';
+            // Сохраняем в localStorage
+            saveToLocalStorage(newRecord);
+            
+            statusEl.textContent = '✅ Пункт успешно добавлен и сохранён локально!';
             statusEl.className = 'geocode-status success';
             
+            // Очищаем форму
             document.getElementById('newSettlementName').value = '';
             document.getElementById('newSettlementRegion').value = '';
             document.getElementById('newSettlementDistrict').innerHTML = '<option value="">Выберите район</option>';
@@ -1332,6 +1489,18 @@
             
             btn.disabled = false;
         };
+
+        // ==================== СОХРАНЕНИЕ В LOCALSTORAGE ====================
+        function saveToLocalStorage(record) {
+            const key = 'dialectUserAdditions';
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            existing.push({
+                ...record,
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem(key, JSON.stringify(existing));
+            console.log(`💾 Запись сохранена локально: ${record.settlement} — ${record.ling_unit_1}`);
+        }
 
         // ==================== ЗАПУСК ====================
         window.onload = function () {
