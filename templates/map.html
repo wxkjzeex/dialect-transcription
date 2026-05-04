@@ -1147,29 +1147,117 @@
 
         // ==================== ИЗОГЛОССЫ ====================
         function drawIsogloss(type) {
-            const layerGroup = L.layerGroup();
-            const color = isoglossColors[type];
+                    const layerGroup = L.layerGroup();
+                    const color = isoglossColors[type];
+        
+                    // Полигон ареала
+                    if (isoglossPolygons[type]) {
+                        L.polygon(isoglossPolygons[type], {
+                            color: color,
+                            weight: 1,
+                            opacity: 0.5,
+                            fillOpacity: 0.12,
+                            fillColor: color
+                        }).bindPopup(`<b>Ареал "${isoglossNames[type]}"</b>`).addTo(layerGroup);
+                    }
+        
+                    // Линия изоглоссы (граница)
+                    if (isoglossLines[type]) {
+                        L.polyline(isoglossLines[type], {
+                            color: color,
+                            weight: 2.5,
+                            opacity: 0.6,
+                            dashArray: '8, 6'
+                        }).addTo(layerGroup);
+                    }
+        
+                    // Крупная подпись в центре ареала
+                    const center = getPolygonCenter(isoglossPolygons[type]);
+                    if (center) {
+                        const label = L.marker(center, {
+                            icon: L.divIcon({
+                                className: 'area-label',
+                                html: `<div style="
+                                    background: ${color}DD;
+                                    color: white;
+                                    padding: 8px 16px;
+                                    border-radius: 20px;
+                                    font-size: 16px;
+                                    font-weight: 700;
+                                    white-space: nowrap;
+                                    text-align: center;
+                                    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+                                    border: 2px solid white;
+                                    letter-spacing: 0.5px;
+                                ">${isoglossNames[type]}</div>`,
+                                iconSize: [0, 0],
+                                iconAnchor: [0, 0]
+                            }),
+                            interactive: false
+                        });
+                        label.addTo(layerGroup);
+                    }
+        
+                    return layerGroup;
+                }
+                // Вычисление центра полигона
+        function getPolygonCenter(coords) {
+            if (!coords || coords.length === 0) return null;
+            
+            let sumLat = 0;
+            let sumLng = 0;
+            const count = coords.length;
+            
+            coords.forEach(([lat, lng]) => {
+                sumLat += lat;
+                sumLng += lng;
+            });
+            
+            return [sumLat / count, sumLng / count];
+        }
+        
+        function updateIsoglossVisibility() {
+            // Удаляем все существующие изоглоссы и подписи
+            Object.keys(isoglossLayers).forEach(key => {
+                if (isoglossLayers[key]) {
+                    map.removeLayer(isoglossLayers[key]);
+                }
+            });
 
-            if (isoglossPolygons[type]) {
-                L.polygon(isoglossPolygons[type], {
-                    color: color,
-                    weight: 1,
-                    opacity: 0.5,
-                    fillOpacity: 0.12,
-                    fillColor: color
-                }).bindPopup(`<b>Ареал "${isoglossNames[type]}"</b>`).addTo(layerGroup);
+            if (!currentQuestionSearch) return;
+
+            // Определяем группу изоглосс по вопросу
+            let group = [];
+            if (currentQuestionSearch.includes('пахать')) {
+                group = ['orat', 'pahat'];
+            } else if (currentQuestionSearch.includes('Петух') || currentQuestionSearch.includes('петух')) {
+                group = ['kochet', 'petuh'];
+            } else if (currentQuestionSearch.includes('Пояс') || currentQuestionSearch.includes('пояс')) {
+                group = ['kushak'];
             }
 
-            if (isoglossLines[type]) {
-                L.polyline(isoglossLines[type], {
-                    color: color,
-                    weight: 2.5,
-                    opacity: 0.6,
-                    dashArray: '8, 6'
-                }).addTo(layerGroup);
-            }
+            group.forEach(type => {
+                // Пересоздаём слой каждый раз для актуальных подписей
+                if (isoglossLayers[type]) {
+                    map.removeLayer(isoglossLayers[type]);
+                }
+                isoglossLayers[type] = drawIsogloss(type);
+                isoglossLayers[type].addTo(map);
+            });
 
-            return layerGroup;
+            // Подгоняем карту под ареалы
+            if (group.length > 0) {
+                const allCoords = [];
+                group.forEach(type => {
+                    if (isoglossPolygons[type]) {
+                        allCoords.push(...isoglossPolygons[type]);
+                    }
+                });
+                if (allCoords.length > 0) {
+                    const bounds = L.latLngBounds(allCoords);
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 8 });
+                }
+            }
         }
         
         function updateIsoglossVisibility() {
