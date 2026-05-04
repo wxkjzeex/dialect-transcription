@@ -687,63 +687,92 @@
         let commentsData = {};
         
         // Изоглоссы
-        let isoglossLayers = {
-            orat: null,
-            pahat: null,
-            kochet: null,
-            petuh: null,
-            kushak: null
-        };
+        let isoglossLayers = {};
 
+       // Ареалы для всех вариантов ответов
         const isoglossPolygons = {
-            orat: [
+            // Глагол "пахать"
+            'орать': [
                 [58.9, 51.0], [58.9, 54.0], [57.5, 54.0],
                 [57.2, 53.2], [57.0, 52.5], [57.2, 51.5],
                 [58.0, 51.2], [58.9, 51.0]
             ],
-            pahat: [
+            'пахать': [
                 [57.0, 51.5], [57.0, 54.0], [56.2, 54.0],
                 [55.8, 53.0], [55.8, 51.5], [56.5, 51.0],
                 [57.0, 51.5]
             ],
-            kochet: [
+            'сабанить': [
+                [56.5, 51.5], [56.5, 53.0], [55.7, 53.0],
+                [55.5, 52.0], [55.7, 51.3], [56.3, 51.0],
+                [56.5, 51.5]
+            ],
+            
+            // Петух
+            'кочет': [
                 [58.8, 51.5], [58.8, 54.2], [57.6, 54.2],
                 [57.4, 53.5], [57.2, 53.0], [57.6, 51.5],
                 [58.8, 51.5]
             ],
-            petuh: [
+            'петух': [
                 [57.6, 51.5], [57.6, 53.8], [56.5, 53.8],
                 [56.2, 53.0], [56.0, 52.0], [56.5, 51.2],
                 [57.6, 51.5]
             ],
-            kushak: [
+            'петун': [
+                [57.8, 52.0], [57.8, 53.5], [57.0, 53.5],
+                [56.8, 52.8], [57.0, 52.0], [57.5, 51.7],
+                [57.8, 52.0]
+            ],
+            
+            // Пояс
+            'кушак': [
                 [58.2, 52.8], [58.2, 54.2], [57.4, 54.2],
                 [57.2, 53.5], [57.4, 52.8], [58.2, 52.8]
+            ],
+            'опояска': [
+                [57.6, 52.0], [57.6, 53.5], [56.8, 53.5],
+                [56.6, 52.8], [56.8, 52.0], [57.3, 51.8],
+                [57.6, 52.0]
+            ],
+            'ремень': [
+                [56.8, 51.5], [56.8, 53.0], [56.0, 53.0],
+                [55.8, 52.2], [56.0, 51.5], [56.4, 51.3],
+                [56.8, 51.5]
+            ],
+            'пояс': [
+                [56.0, 51.0], [56.0, 52.5], [55.3, 52.5],
+                [55.1, 51.8], [55.3, 51.0], [55.7, 50.8],
+                [56.0, 51.0]
             ]
         };
 
+        // Линии изоглосс
         const isoglossLines = {
-            orat: [[58.2, 51.2], [57.8, 51.8], [57.5, 52.5], [57.2, 53.0], [57.0, 53.5], [56.8, 54.0]],
-            pahat: [[58.2, 51.2], [57.8, 51.8], [57.5, 52.5], [57.2, 53.0], [57.0, 53.5], [56.8, 54.0]],
-            kochet: [[58.4, 51.5], [58.0, 52.0], [57.7, 52.8], [57.5, 53.5], [57.3, 54.0]],
-            petuh: [[58.4, 51.5], [58.0, 52.0], [57.7, 52.8], [57.5, 53.5], [57.3, 54.0]],
-            kushak: [[58.0, 52.5], [57.8, 53.0], [57.5, 53.5], [57.2, 54.0]]
+            'орать': [[58.2, 51.2], [57.8, 51.8], [57.5, 52.5], [57.2, 53.0], [57.0, 53.5], [56.8, 54.0]],
+            'пахать': [[58.2, 51.2], [57.8, 51.8], [57.5, 52.5], [57.2, 53.0], [57.0, 53.5], [56.8, 54.0]],
+            'сабанить': [[56.8, 51.2], [56.4, 51.6], [56.0, 52.0], [55.8, 52.3], [55.6, 52.8]],
+            'кочет': [[58.4, 51.5], [58.0, 52.0], [57.7, 52.8], [57.5, 53.5], [57.3, 54.0]],
+            'петух': [[58.4, 51.5], [58.0, 52.0], [57.7, 52.8], [57.5, 53.5], [57.3, 54.0]],
+            'петун': [[57.9, 51.8], [57.6, 52.2], [57.3, 52.6], [57.1, 53.0], [56.9, 53.3]],
+            'кушак': [[58.0, 52.5], [57.8, 53.0], [57.5, 53.5], [57.2, 54.0]],
+            'опояска': [[57.8, 51.8], [57.4, 52.3], [57.0, 52.8], [56.8, 53.2]],
+            'ремень': [[57.0, 51.3], [56.6, 51.8], [56.2, 52.3], [55.9, 52.8]],
+            'пояс': [[56.2, 50.9], [55.8, 51.4], [55.4, 51.9], [55.2, 52.3]]
         };
 
+        // Цвета изоглосс
         const isoglossColors = {
-            orat: '#e74c3c',
-            pahat: '#2980b9',
-            kochet: '#e67e22',
-            petuh: '#27ae60',
-            kushak: '#9b59b6'
-        };
-
-        const isoglossNames = {
-            orat: 'орать',
-            pahat: 'пахать',
-            kochet: 'кочет',
-            petuh: 'петух',
-            kushak: 'кушак'
+            'орать': '#e74c3c',
+            'пахать': '#2980b9',
+            'сабанить': '#f39c12',
+            'кочет': '#e67e22',
+            'петух': '#27ae60',
+            'петун': '#8e44ad',
+            'кушак': '#9b59b6',
+            'опояска': '#1abc9c',
+            'ремень': '#2c3e50',
+            'пояс': '#d35400'
         };
         
         // ==================== ИНИЦИАЛИЗАЦИЯ КАРТЫ ====================
@@ -1201,6 +1230,8 @@
                     return layerGroup;
                 }
                 // Вычисление центра полигона
+        // ==================== ИЗОГЛОССЫ ====================
+        
         function getPolygonCenter(coords) {
             if (!coords || coords.length === 0) return null;
             
@@ -1215,49 +1246,69 @@
             
             return [sumLat / count, sumLng / count];
         }
-        
-        function updateIsoglossVisibility() {
-            // Удаляем все существующие изоглоссы и подписи
-            Object.keys(isoglossLayers).forEach(key => {
-                if (isoglossLayers[key]) {
-                    map.removeLayer(isoglossLayers[key]);
-                }
-            });
 
-            if (!currentQuestionSearch) return;
+        function drawIsogloss(type) {
+            const layerGroup = L.layerGroup();
+            const color = isoglossColors[type];
+            const name = type; // название лексемы
 
-            // Определяем группу изоглосс по вопросу
-            let group = [];
-            if (currentQuestionSearch.includes('пахать')) {
-                group = ['orat', 'pahat'];
-            } else if (currentQuestionSearch.includes('Петух') || currentQuestionSearch.includes('петух')) {
-                group = ['kochet', 'petuh'];
-            } else if (currentQuestionSearch.includes('Пояс') || currentQuestionSearch.includes('пояс')) {
-                group = ['kushak'];
+            // Полигон ареала
+            if (isoglossPolygons[type]) {
+                L.polygon(isoglossPolygons[type], {
+                    color: color,
+                    weight: 1.5,
+                    opacity: 0.6,
+                    fillOpacity: 0.15,
+                    fillColor: color
+                }).bindPopup(`<b>Ареал "${name}"</b>`).addTo(layerGroup);
             }
 
-            group.forEach(type => {
-                // Пересоздаём слой каждый раз для актуальных подписей
-                if (isoglossLayers[type]) {
-                    map.removeLayer(isoglossLayers[type]);
-                }
-                isoglossLayers[type] = drawIsogloss(type);
-                isoglossLayers[type].addTo(map);
-            });
+            // Линия изоглоссы
+            if (isoglossLines[type]) {
+                L.polyline(isoglossLines[type], {
+                    color: color,
+                    weight: 2.5,
+                    opacity: 0.7,
+                    dashArray: '8, 6'
+                }).addTo(layerGroup);
+            }
 
-            // Подгоняем карту под ареалы
-            if (group.length > 0) {
-                const allCoords = [];
-                group.forEach(type => {
-                    if (isoglossPolygons[type]) {
-                        allCoords.push(...isoglossPolygons[type]);
-                    }
+            // Аккуратная подпись
+            const center = getPolygonCenter(isoglossPolygons[type]);
+            if (center) {
+                // Создаём контейнер для измерения размера текста
+                const textWidth = name.length * 14; // примерная ширина
+                
+                const label = L.marker(center, {
+                    icon: L.divIcon({
+                        className: 'area-label',
+                        html: `<div style="
+                            background: ${color}E6;
+                            color: white;
+                            padding: 5px 14px;
+                            border-radius: 16px;
+                            font-size: 13px;
+                            font-weight: 600;
+                            white-space: nowrap;
+                            text-align: center;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+                            border: 2px solid white;
+                            letter-spacing: 0.3px;
+                            line-height: 1.4;
+                            width: fit-content;
+                            margin: 0 auto;
+                        ">${name}</div>`,
+                        iconSize: [textWidth + 28, 28],
+                        iconAnchor: [Math.floor((textWidth + 28) / 2), 14],
+                        popupAnchor: [0, -14]
+                    }),
+                    interactive: false,
+                    keyboard: false
                 });
-                if (allCoords.length > 0) {
-                    const bounds = L.latLngBounds(allCoords);
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 8 });
-                }
+                label.addTo(layerGroup);
             }
+
+            return layerGroup;
         }
         
         function updateIsoglossVisibility() {
@@ -1265,27 +1316,49 @@
             Object.keys(isoglossLayers).forEach(key => {
                 if (isoglossLayers[key]) {
                     map.removeLayer(isoglossLayers[key]);
+                    isoglossLayers[key] = null;
                 }
             });
 
             if (!currentQuestionSearch) return;
 
-            // Определяем группу изоглосс по вопросу
-            let group = [];
-            if (currentQuestionSearch.includes('пахать')) {
-                group = ['orat', 'pahat'];
-            } else if (currentQuestionSearch.includes('Петух') || currentQuestionSearch.includes('петух')) {
-                group = ['kochet', 'petuh'];
-            } else if (currentQuestionSearch.includes('Пояс') || currentQuestionSearch.includes('пояс')) {
-                group = ['kushak'];
-            }
-
-            group.forEach(type => {
-                if (!isoglossLayers[type]) {
-                    isoglossLayers[type] = drawIsogloss(type);
+            // Определяем группу изоглосс по вопросу — собираем ВСЕ варианты из данных
+            const activeTypes = new Set();
+            
+            dialectData.forEach(rec => {
+                if (rec.question_text && rec.question_text.toLowerCase().includes(currentQuestionSearch)) {
+                    if (rec.ling_unit_1) {
+                        const key = rec.ling_unit_1.toLowerCase().trim();
+                        if (isoglossPolygons[key]) activeTypes.add(key);
+                    }
+                    if (rec.ling_unit_2) {
+                        const key = rec.ling_unit_2.toLowerCase().trim();
+                        if (isoglossPolygons[key]) activeTypes.add(key);
+                    }
                 }
+            });
+
+            console.log(`🗺️ Ареалы для вопроса "${currentQuestionSearch}":`, Array.from(activeTypes));
+
+            // Рисуем все нужные ареалы
+            activeTypes.forEach(type => {
+                isoglossLayers[type] = drawIsogloss(type);
                 isoglossLayers[type].addTo(map);
             });
+
+            // Подгоняем карту под все ареалы
+            if (activeTypes.size > 0) {
+                const allCoords = [];
+                activeTypes.forEach(type => {
+                    if (isoglossPolygons[type]) {
+                        allCoords.push(...isoglossPolygons[type]);
+                    }
+                });
+                if (allCoords.length > 0) {
+                    const bounds = L.latLngBounds(allCoords);
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 9 });
+                }
+            }
         }
         
         // ==================== ФИЛЬТР ПО РЕГИОНАМ ====================
