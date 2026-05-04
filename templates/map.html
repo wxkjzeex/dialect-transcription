@@ -417,13 +417,11 @@
             <!-- Поиск по лингвистической единице -->
             <div class="section">
                 <div class="section-title">🔍 Поиск по лексеме</div>
-                <div class="search-wrapper">
-                    <input type="text" id="wordSearch" placeholder="Введите слово... (орать, кочет, кушак)">
-                    <button id="searchBtn">Найти</button>
-                </div>
-                <button id="resetSearchBtn" style="width:100%; padding:8px; background:#95a5a6; color:white; border:none; border-radius:6px; cursor:pointer;">Сбросить поиск</button>
-                <div class="search-hint">Поиск по полям ling_unit_1 и ling_unit_2</div>
-                <div id="searchStats" class="search-stats" style="display:none;"></div>
+                <select id="wordSearch" style="width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white;">
+                    <option value="">Все лексемы</option>
+                </select>
+                <button id="resetSearchBtn" style="width:100%; padding:8px; margin-top:8px; background:#95a5a6; color:white; border:none; border-radius:6px; cursor:pointer;">Сбросить поиск</button>
+                <div id="searchStats" class="search-stats" style="display:none; margin-top:10px;"></div>
             </div>
 
             <!-- Поиск по вопросам -->
@@ -874,7 +872,7 @@
                     
                     // Загружаем локально сохранённые данные
                     loadLocalData();
-                    
+                    populateLexemeSelect();
                     initDistrictFilters();
                     renderMarkers();
                 },
@@ -894,6 +892,7 @@
                         { region: "Татарстан", district: "Агрызский", settlement: "с. Красный Бор", question_code: "L 205", question_text: "Глагол 'пахать'", ling_unit_1: "пахать", ling_unit_2: "сабанить" }
                     ];
                     loadLocalData();
+                    populateLexemeSelect();
                     initDistrictFilters();
                     renderMarkers();
                 }
@@ -1009,8 +1008,8 @@
 
                 if (currentSearchTerm) {
                     const hasMatch = settlementRecords.some(rec =>
-                        (rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().includes(currentSearchTerm)) ||
-                        (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().includes(currentSearchTerm))
+                        (rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().trim() === currentSearchTerm) ||
+                        (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().trim() === currentSearchTerm)
                     );
                     if (!hasMatch) return;
                 }
@@ -1148,8 +1147,14 @@
         function updateLegend() {
             const legendDiv = document.getElementById('questionLegend');
             
+            // Если активен поиск по лексеме — показываем легенду для лексемы
+            if (currentSearchTerm) {
+                updateLexemeLegend();
+                return;
+            }
+            
             if (!currentQuestionSearch) {
-                legendDiv.innerHTML = '<em>Выберите вопрос для отображения ареалов</em>';
+                legendDiv.innerHTML = '<em>Выберите вопрос или лексему для отображения ареалов</em>';
                 return;
             }
 
@@ -1212,10 +1217,48 @@
         }
         
         // ==================== ПОИСК ПО ЛЕКСЕМЕ ====================
+        // Заполнение выпадающего списка лексем
+        function populateLexemeSelect() {
+            const select = document.getElementById('wordSearch');
+            if (!select) return;
+            
+            // Собираем все уникальные лексемы из данных
+            const allLexemes = new Set();
+            
+            dialectData.forEach(rec => {
+                if (rec.ling_unit_1) {
+                    allLexemes.add(rec.ling_unit_1.trim());
+                }
+                if (rec.ling_unit_2) {
+                    allLexemes.add(rec.ling_unit_2.trim());
+                }
+            });
+            
+            // Сортируем по алфавиту
+            const sortedLexemes = Array.from(allLexemes)
+                .filter(l => l.length > 0)
+                .sort((a, b) => a.localeCompare(b, 'ru'));
+            
+            // Строим HTML
+            let html = '<option value="">Все лексемы</option>';
+            sortedLexemes.forEach(lexeme => {
+                html += `<option value="${lexeme}">${lexeme}</option>`;
+            });
+            
+            select.innerHTML = html;
+            
+            console.log(`📝 Загружено ${sortedLexemes.length} уникальных лексем в выпадающий список`);
+        }
+        
         function performSearch() {
-            const term = document.getElementById('wordSearch').value.trim().toLowerCase();
+            const select = document.getElementById('wordSearch');
+            const term = select.value.trim().toLowerCase();
             currentSearchTerm = term;
-            if (!term) document.getElementById('searchStats').style.display = 'none';
+            
+            if (!term) {
+                document.getElementById('searchStats').style.display = 'none';
+            }
+            
             renderMarkers();
         }
         
@@ -1231,20 +1274,54 @@
                 document.getElementById('searchStats').style.display = 'none';
                 return;
             }
+            
             const matchedSettlements = new Set();
             dialectData.forEach(rec => {
-                if ((rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().includes(currentSearchTerm)) ||
-                    (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().includes(currentSearchTerm))) {
+                if ((rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().trim() === currentSearchTerm) ||
+                    (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().trim() === currentSearchTerm)) {
                     matchedSettlements.add(rec.settlement);
                 }
             });
+            
             document.getElementById('searchStats').innerHTML = `
                 🔎 Лексема <strong>"${currentSearchTerm}"</strong> найдена в 
                 <strong>${matchedSettlements.size}</strong> населенных пунктах
             `;
             document.getElementById('searchStats').style.display = 'block';
+            
+            // Обновляем легенду для выбранной лексемы
+            updateLexemeLegend();
         }
-
+        
+        // Легенда при поиске по лексеме
+        function updateLexemeLegend() {
+            const legendDiv = document.getElementById('questionLegend');
+            
+            if (currentSearchTerm) {
+                const color = getAnswerColor(currentSearchTerm);
+                
+                // Считаем количество
+                const matchedSettlements = new Set();
+                dialectData.forEach(rec => {
+                    if ((rec.ling_unit_1 && rec.ling_unit_1.toLowerCase().trim() === currentSearchTerm) ||
+                        (rec.ling_unit_2 && rec.ling_unit_2.toLowerCase().trim() === currentSearchTerm)) {
+                        matchedSettlements.add(rec.settlement);
+                    }
+                });
+                
+                legendDiv.innerHTML = `
+                    <div style="font-weight:600; margin-bottom:6px;">🔍 Поиск по лексеме</div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background:${color};"></span>
+                        "${currentSearchTerm}"
+                        <span style="color:#7f8c8d; margin-left:6px;">(${matchedSettlements.size} пунктов)</span>
+                    </div>
+                `;
+            } else if (!currentQuestionSearch) {
+                legendDiv.innerHTML = '<em>Выберите вопрос или лексему для отображения ареалов</em>';
+            }
+        }
+        
         // ==================== ИЗОГЛОССЫ ====================
         function drawIsogloss(type) {
                     const layerGroup = L.layerGroup();
@@ -1871,12 +1948,10 @@
             loadData();
             initRegionFilters();
             populateQuestionSelect();
+            // populateLexemeSelect() вызывается после загрузки данных в loadData()
 
-            document.getElementById('searchBtn').addEventListener('click', performSearch);
+            document.getElementById('wordSearch').addEventListener('change', performSearch);
             document.getElementById('resetSearchBtn').addEventListener('click', resetSearch);
-            document.getElementById('wordSearch').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') performSearch();
-            });
 
             document.getElementById('questionSearch').addEventListener('change', filterByQuestion);
             document.getElementById('resetQuestionSearchBtn').addEventListener('click', resetQuestionSearch);
